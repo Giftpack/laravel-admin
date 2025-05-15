@@ -1,36 +1,30 @@
 <?php
 
-use Faker\Generator as Faker;
-use Illuminate\Database\Eloquent\Factory;
+use Illuminate\Support\Facades\DB;
 
-$factory = app(Factory::class);
+DB::table('test_users')->insert([
+    'username' => fake()->userName,
+    'email'    => fake()->email,
+    'mobile'   => fake()->phoneNumber,
+    'avatar'   => fake()->imageUrl(),
+    'password' => '$2y$10$U2WSLymU6eKJclK06glaF.Gj3Sw/ieDE3n7mJYjKEgDh4nzUiSESO', // bcrypt(123456)
+]);
 
-$factory->define(Tests\Models\User::class, function (Faker $faker) {
-    return [
-        'username' => $faker->userName,
-        'email'    => $faker->email,
-        'mobile'   => $faker->phoneNumber,
-        'avatar'   => $faker->imageUrl(),
-        'password' => '$2y$10$U2WSLymU6eKJclK06glaF.Gj3Sw/ieDE3n7mJYjKEgDh4nzUiSESO', // bcrypt(123456)
-    ];
-});
+$user = DB::table('test_users')->latest()->first();
 
-$factory->define(Tests\Models\Profile::class, function (Faker $faker) {
-    return [
-        'first_name' => $faker->firstName,
-        'last_name'  => $faker->lastName,
-        'postcode'   => $faker->postcode,
-        'address'    => $faker->address,
-        'latitude'   => $faker->latitude,
-        'longitude'  => $faker->longitude,
-        'color'      => $faker->hexColor,
-        'start_at'   => $faker->dateTime,
-        'end_at'     => $faker->dateTime,
-    ];
-});
+DB::table('test_user_profiles')->insert([
+    'user_id'    => $user->id,
+    'first_name' => fake()->firstName,
+    'last_name'  => fake()->lastName,
+    'postcode'   => fake()->postcode,
+    'address'    => fake()->address,
+    'latitude'   => fake()->latitude,
+    'longitude'  => fake()->longitude,
+    'color'      => fake()->hexColor,
+    'start_at'   => fake()->dateTime,
+    'end_at'     => fake()->dateTime,
+]);
 
-$factory->define(Tests\Models\Tag::class, function (Faker $faker) {
-    return [
-        'name' => $faker->word,
-    ];
-});
+DB::table('test_tags')->insert([
+    'name' => fake()->word,
+]);

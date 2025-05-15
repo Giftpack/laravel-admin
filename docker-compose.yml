@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: laravel-admin-postgres
+    environment:
+      - POSTGRES_DB=laravel_admin_test
+      - POSTGRES_USER=laravel_admin_test
+      - POSTGRES_PASSWORD=secret
+
+  application:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: laravel-admin
+    working_dir: /application
+    volumes:
+      - ./:/application
+    depends_on:
+      - postgres
+    links:
+      - postgres

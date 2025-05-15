@@ -1,6 +1,8 @@
 <?php
 
 use Encore\Admin\Auth\Database\Administrator;
+use Illuminate\Support\Facades\DB;
+use Tests\Models\Tag;
 use Tests\Models\User as UserModel;
 
 class UserFormTest extends TestCase
@@ -33,7 +35,7 @@ class UserFormTest extends TestCase
             ->seeInElement('span[class=help-block]', 'Please input your postcode')
             ->seeElement('span[class=help-block] i[class*=fa-image]')
             ->seeInElement('span[class=help-block]', '上传头像')
-            ->seeElement("select[name='tags[]'][multiple=multiple]")
+            ->seeElement("select[name='tags[]'][multiple]")
             ->seeInElement('a[html-field]', 'html...');
     }
 
@@ -77,7 +79,7 @@ class UserFormTest extends TestCase
             ->seeInElement('td', $data['profile']['start_at'])
             ->seeInElement('td', $data['profile']['end_at']);
 
-        $this->assertCount(1, UserModel::all());
+        $this->assertCount(2, UserModel::all());
 
         $this->seeInDatabase('test_users', ['username' => $data['username']]);
         $this->seeInDatabase('test_users', ['email' => $data['email']]);
@@ -94,19 +96,48 @@ class UserFormTest extends TestCase
         $this->seeInDatabase('test_user_profiles', ['start_at' => $data['profile']['start_at']]);
         $this->seeInDatabase('test_user_profiles', ['end_at' => $data['profile']['end_at']]);
 
-        $avatar = UserModel::first()->avatar;
+        $avatar = UserModel::where('username', $data['username'])->first()->avatar;
 
         $this->assertFileExists(public_path('uploads/'.$avatar));
     }
 
     protected function seedsTable($count = 100)
     {
-        factory(\Tests\Models\User::class, $count)
-            ->create()
-            ->each(function ($u) {
-                $u->profile()->save(factory(\Tests\Models\Profile::class)->make());
-                $u->tags()->saveMany(factory(\Tests\Models\Tag::class, 5)->make());
-            });
+        while ($count--) {
+            DB::table('test_users')->insert([
+                'username' => fake()->userName,
+                'email'    => fake()->email,
+                'mobile'   => fake()->phoneNumber,
+                'avatar'   => fake()->imageUrl(),
+                'password' => '$2y$10$U2WSLymU6eKJclK06glaF.Gj3Sw/ieDE3n7mJYjKEgDh4nzUiSESO', // bcrypt(123456)
+            ]);
+
+            $user = DB::table('test_users')->latest('id')->first();
+
+            DB::table('test_user_profiles')->insert([
+                'user_id'    => $user->id,
+                'first_name' => fake()->firstName,
+                'last_name'  => fake()->lastName,
+                'postcode'   => fake()->postcode,
+                'address'    => fake()->address,
+                'latitude'   => fake()->latitude,
+                'longitude'  => fake()->longitude,
+                'color'      => fake()->hexColor,
+                'start_at'   => fake()->dateTime,
+                'end_at'     => fake()->dateTime,
+            ]);
+
+            DB::table('test_tags')->insert([
+                'name' => fake()->word,
+            ]);
+
+            $tag = DB::table('test_tags')->latest('id')->first();
+
+            DB::table('test_user_tags')->insert([
+                'user_id' => $user->id,
+                'tag_id'  => $tag->id,
+            ]);
+        }
     }
 
     public function testEditForm()
@@ -131,10 +162,10 @@ class UserFormTest extends TestCase
             ->seeElement("input[type=text][name='profile[color]'][value='{$user->profile->color}']")
             ->seeElement("input[type=text][name='profile[start_at]'][value='{$user->profile->start_at}']")
             ->seeElement("input[type=text][name='profile[end_at]'][value='{$user->profile->end_at}']")
-            ->seeElement("select[name='tags[]'][multiple=multiple]");
+            ->seeElement("select[name='tags[]'][multiple]");
 
-        $this->assertCount(50, $this->crawler()->filter("select[name='tags[]'] option"));
-        $this->assertCount(5, $this->crawler()->filter("select[name='tags[]'] option[selected]"));
+        $this->assertCount(11, $this->crawler()->filter("select[name='tags[]'] option"));
+        $this->assertCount(1, $this->crawler()->filter("select[name='tags[]'] option[selected]"));
     }
 
     public function testUpdateForm()
@@ -171,14 +202,14 @@ class UserFormTest extends TestCase
         $this->type('xxaxx', 'email')
             ->press('Submit')
             ->seePageIs("admin/users/$id/edit")
-            ->see('The email must be a valid email address.');
+            ->see('The email field must be a valid email address.');
 
         $this->visit("admin/users/$id/edit")
             ->type('123', 'password')
             ->type('1234', 'password_confirmation')
             ->press('Submit')
             ->seePageIs("admin/users/$id/edit")
-            ->see('The Password confirmation does not match.');
+            ->see('The Password field confirmation does not match.');
 
         $this->type('xx@xx.xx', 'email')
             ->type('123', 'password')

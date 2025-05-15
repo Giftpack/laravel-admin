@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 class CreateTestTables extends Migration
 {
@@ -53,7 +54,7 @@ class CreateTestTables extends Migration
 
         Schema::create('test_user_profiles', function (Blueprint $table) {
             $table->increments('id');
-            $table->string('user_id');
+            $table->integer('user_id');
             $table->string('first_name')->nullable();
             $table->string('last_name')->nullable();
             $table->string('postcode')->nullable();

@@ -8,7 +8,7 @@ use Laravel\BrowserKitTesting\TestCase as BaseTestCase;
 
 class TestCase extends BaseTestCase
 {
-    protected $baseUrl = 'http://localhost:8000';
+    public $baseUrl = 'http://localhost';
 
     /**
      * Boots the application.
@@ -37,11 +37,12 @@ class TestCase extends BaseTestCase
 
         $adminConfig = require __DIR__.'/config/admin.php';
 
-        $this->app['config']->set('database.default', env('DB_CONNECTION', 'mysql'));
-        $this->app['config']->set('database.connections.mysql.host', env('MYSQL_HOST', 'localhost'));
-        $this->app['config']->set('database.connections.mysql.database', env('MYSQL_DATABASE', 'laravel_admin_test'));
-        $this->app['config']->set('database.connections.mysql.username', env('MYSQL_USER', 'root'));
-        $this->app['config']->set('database.connections.mysql.password', env('MYSQL_PASSWORD', ''));
+        $default_database = env('DB_CONNECTION', 'pgsql');
+        $this->app['config']->set('database.default', $default_database);
+        $this->app['config']->set('database.connections.'.$default_database.'.host', env('DB_HOST', 'localhost'));
+        $this->app['config']->set('database.connections.'.$default_database.'.database', env('DB_DATABASE', 'laravel_admin_test'));
+        $this->app['config']->set('database.connections.'.$default_database.'.username', env('DB_USER', 'root'));
+        $this->app['config']->set('database.connections.'.$default_database.'.password', env('DB_PASSWORD', ''));
         $this->app['config']->set('app.key', 'AckfSECXIvnK5r28GVIWUAxmbBSjTsmF');
         $this->app['config']->set('filesystems', require __DIR__.'/config/filesystems.php');
         $this->app['config']->set('admin', $adminConfig);
@@ -66,9 +67,9 @@ class TestCase extends BaseTestCase
 
         require __DIR__.'/seeds/factory.php';
 
-//        \Encore\Admin\Admin::$css = [];
-//        \Encore\Admin\Admin::$js = [];
-//        \Encore\Admin\Admin::$script = [];
+        //        \Encore\Admin\Admin::$css = [];
+        //        \Encore\Admin\Admin::$js = [];
+        //        \Encore\Admin\Admin::$script = [];
     }
 
     protected function tearDown(): void
@@ -77,7 +78,7 @@ class TestCase extends BaseTestCase
 
         (new CreateTestTables())->down();
 
-        DB::select("delete from `migrations` where `migration` = '2016_01_04_173148_create_admin_tables'");
+        DB::select("delete from migrations where migration = '2016_01_04_173148_create_admin_tables'");
 
         parent::tearDown();
     }
@@ -93,6 +94,7 @@ class TestCase extends BaseTestCase
 
         $fileSystem->requireOnce(__DIR__.'/migrations/2016_11_22_093148_create_test_tables.php');
 
+        (new CreateTestTables())->down();
         (new CreateTestTables())->up();
     }
 }

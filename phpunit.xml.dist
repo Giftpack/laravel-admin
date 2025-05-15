@@ -15,4 +15,12 @@
             <directory>tests/</directory>
         </testsuite>
     </testsuites>
+    <php>
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_HOST" value="laravel-admin-postgres"/>
+        <env name="DB_DATABASE" value="laravel_admin_test"/>
+        <env name="DB_USER" value="laravel_admin_test"/>
+        <env name="DB_PASSWORD" value="secret"/>
+        <ini name="memory_limit" value="-1"/>
+    </php>
 </phpunit>
