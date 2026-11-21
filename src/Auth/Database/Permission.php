@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 class Permission extends Model
 {
     use DefaultDatetimeFormat;
+    use TransactionalGrants;
 
     /**
      * @var array
@@ -54,6 +55,11 @@ class Permission extends Model
         return $this->belongsToMany($relatedModel, $pivotTable, 'permission_id', 'role_id');
     }
 
+    public function administrators(): BelongsToMany
+    {
+        return $this->belongsToMany(config('admin.database.users_model'), config('admin.database.user_permissions_table'), 'permission_id', 'user_id');
+    }
+
     /**
      * If request should pass through the current permission.
      *
@@ -70,12 +76,12 @@ class Permission extends Model
         $method = $this->http_method;
 
         $matches = array_map(function ($path) use ($method) {
-            $path = trim(config('admin.route.prefix'), '/').$path;
-
             if (Str::contains($path, ':')) {
-                list($method, $path) = explode(':', $path);
+                list($method, $path) = explode(':', $path, 2);
                 $method = explode(',', $method);
             }
+
+            $path = trim(config('admin.route.prefix'), '/').'/'.ltrim(trim($path), '/');
 
             return compact('method', 'path');
         }, explode("\n", $this->http_path));
@@ -98,7 +104,7 @@ class Permission extends Model
      */
     public function getHttpPathAttribute($path)
     {
-        return str_replace("\r\n", "\n", $path);
+        return str_replace("\r\n", "\n", $path ?? '');
     }
 
     /**
@@ -133,9 +139,7 @@ class Permission extends Model
      */
     public function setHttpMethodAttribute($method)
     {
-        if (is_array($method)) {
-            $this->attributes['http_method'] = implode(',', $method);
-        }
+        $this->attributes['http_method'] = is_array($method) ? implode(',', $method) : $method;
     }
 
     /**
@@ -161,8 +165,9 @@ class Permission extends Model
     {
         parent::boot();
 
-        static::deleting(function ($model) {
+        static::deleted(function ($model) {
             $model->roles()->detach();
+            $model->administrators()->detach();
         });
     }
 }

@@ -102,7 +102,8 @@ SCRIPT;
     {
         $options = [];
 
-        if ($value = $this->value()) {
+        $value = $this->value();
+        if ($value !== null && $value !== '') {
             $options = [$value => $value];
         }
 

@@ -8,14 +8,20 @@ class Session
 {
     public function handle(Request $request, \Closure $next)
     {
-        $path = '/'.trim(config('admin.route.prefix'), '/');
-
-        config(['session.path' => $path]);
-
-        if ($domain = config('admin.route.domain')) {
-            config(['session.domain' => $domain]);
+        // Host cookie scope is retained unless the consumer explicitly opts in.
+        $overrides = config('admin.session', []);
+        $previous = [];
+        foreach (['path', 'domain'] as $key) {
+            if (array_key_exists($key, $overrides)) {
+                $previous['session.'.$key] = config('session.'.$key);
+                config(['session.'.$key => $overrides[$key]]);
+            }
         }
 
-        return $next($request);
+        try {
+            return $next($request);
+        } finally {
+            config($previous);
+        }
     }
 }

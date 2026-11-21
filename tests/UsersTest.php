@@ -44,7 +44,8 @@ class UsersTest extends TestCase
             ->seePageIs('admin/auth/users')
             ->seeInDatabase(config('admin.database.role_users_table'), ['user_id' => 2, 'role_id' => 1]);
 
-        $this->visit('admin/auth/logout')
+        $this->call('POST', 'admin/auth/logout');
+        $this->visit('admin')
             ->dontSeeIsAuthenticated('admin')
             ->seePageIs('admin/auth/login')
             ->submitForm('Login', ['username' => $user['username'], 'password' => $user['password']])
@@ -84,7 +85,9 @@ class UsersTest extends TestCase
             ->see('Create')
             ->submitForm('Submit', $data)
             ->seePageIs('admin/auth/users')
-            ->visit('admin/auth/logout')
+            ->call('POST', 'admin/auth/logout');
+
+        $this->visit('admin')
             ->dontSeeIsAuthenticated('admin')
             ->seePageIs('admin/auth/login')
             ->submitForm('Login', ['username' => $this->user->username, 'password' => $password])

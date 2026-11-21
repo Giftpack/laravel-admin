@@ -14,10 +14,10 @@ trait HasHotKeys
 
         $script = <<<SCRIPT
 
-$(document).off('keydown').keydown(function(e) {
+$(document).off('keydown.adminGrid').on('keydown.adminGrid', function(e) {
     var tag = e.target.tagName.toLowerCase();
     
-    if (tag == 'input' || tag == 'textarea' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
+    if (tag == 'input' || tag == 'textarea' || tag == 'select' || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
         return;
     }
 

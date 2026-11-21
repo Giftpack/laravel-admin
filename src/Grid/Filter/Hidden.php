@@ -39,6 +39,9 @@ class Hidden extends AbstractFilter
      */
     public function render()
     {
-        return "<input type='hidden' name='$this->name' value='$this->value'>";
+        $name = e($this->name);
+        $value = e($this->value);
+
+        return "<input type='hidden' name='$name' value='$value'>";
     }
 }

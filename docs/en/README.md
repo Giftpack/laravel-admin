@@ -1,3 +1,5 @@
+> This checkout documents the unpublished PHP8.5/Laravel13 2.0 candidate. Start with [installation](installation.md) and [existing-host upgrade/rollback](upgrade.md); older examples below retain historical context.
+
 laravel-admin
 =====
 

@@ -106,7 +106,7 @@ class Admin
      *
      * @return \Encore\Admin\Tree
      */
-    public function tree($model, Closure $callable = null)
+    public function tree($model, ?Closure $callable = null)
     {
         return new Tree($this->getModel($model), $callable);
     }
@@ -133,7 +133,7 @@ class Admin
      *
      * @deprecated since v1.6.1
      */
-    public function content(Closure $callable = null)
+    public function content(?Closure $callable = null)
     {
         return new Content($callable);
     }
@@ -264,7 +264,7 @@ class Admin
      *
      * @return Navbar
      */
-    public function navbar(Closure $builder = null)
+    public function navbar(?Closure $builder = null)
     {
         if (is_null($builder)) {
             return $this->getNavbar();
@@ -308,6 +308,8 @@ class Admin
     {
         $attributes = [
             'prefix'     => config('admin.route.prefix'),
+            'domain'     => config('admin.route.domain'),
+            'as'         => config('admin.route.name_prefix', 'admin').'.',
             'middleware' => config('admin.route.middleware'),
         ];
 
@@ -317,25 +319,26 @@ class Admin
             $router->namespace('\Encore\Admin\Controllers')->group(function ($router) {
 
                 /* @var \Illuminate\Routing\Router $router */
-                $router->resource('auth/users', 'UserController')->names('admin.auth.users');
-                $router->resource('auth/roles', 'RoleController')->names('admin.auth.roles');
-                $router->resource('auth/permissions', 'PermissionController')->names('admin.auth.permissions');
-                $router->resource('auth/menu', 'MenuController', ['except' => ['create']])->names('admin.auth.menu');
-                $router->resource('auth/logs', 'LogController', ['only' => ['index', 'destroy']])->names('admin.auth.logs');
+                $router->resource('auth/users', 'UserController')->names('auth.users');
+                $router->resource('auth/roles', 'RoleController')->names('auth.roles');
+                $router->resource('auth/permissions', 'PermissionController')->names('auth.permissions');
+                $router->resource('auth/menu', 'MenuController', ['except' => ['create']])->names('auth.menu');
+                $router->resource('auth/logs', 'LogController', ['only' => ['index', 'destroy']])->names('auth.logs');
 
-                $router->post('_handle_form_', 'HandleController@handleForm')->name('admin.handle-form');
-                $router->post('_handle_action_', 'HandleController@handleAction')->name('admin.handle-action');
-                $router->get('_handle_selectable_', 'HandleController@handleSelectable')->name('admin.handle-selectable');
-                $router->get('_handle_renderable_', 'HandleController@handleRenderable')->name('admin.handle-renderable');
+                $router->post('_handle_form_', 'HandleController@handleForm')->name('handle-form');
+                $router->post('_handle_action_', 'HandleController@handleAction')->name('handle-action');
+                $router->get('_handle_selectable_', 'HandleController@handleSelectable')->name('handle-selectable');
+                $router->get('_handle_renderable_', 'HandleController@handleRenderable')->name('handle-renderable');
             });
 
             $authController = config('admin.auth.controller', AuthController::class);
 
             /* @var \Illuminate\Routing\Router $router */
-            $router->get('auth/login', $authController.'@getLogin')->name('admin.login');
+            $router->get('auth/login', $authController.'@getLogin')->name('login');
             $router->post('auth/login', $authController.'@postLogin');
-            $router->get('auth/logout', $authController.'@getLogout')->name('admin.logout');
-            $router->get('auth/setting', $authController.'@getSetting')->name('admin.setting');
+            $router->get('auth/logout', $authController.'@getLogout');
+            $router->post('auth/logout', $authController.'@getLogout')->name('logout');
+            $router->get('auth/setting', $authController.'@getSetting')->name('setting');
             $router->put('auth/setting', $authController.'@putSetting');
         });
     }
@@ -367,6 +370,28 @@ class Admin
     public static function booted(callable $callback)
     {
         static::$bootedCallbacks[] = $callback;
+    }
+
+    /** Run one admin request without retaining its presentation state in a worker. */
+    public function withinRequest(Closure $callback)
+    {
+        $properties = ['script', 'deferredScript', 'style', 'css', 'js', 'html', 'headerJs', 'metaTitle', 'favicon', 'minifyIgnores', 'manifestData'];
+        $state = [];
+        foreach ($properties as $property) {
+            $state[$property] = static::$$property;
+        }
+        $menu = $this->menu;
+        $navbar = $this->navbar;
+        $this->navbar = $navbar ? clone $navbar : null;
+        try {
+            return $callback();
+        } finally {
+            foreach ($state as $property => $value) {
+                static::$$property = $value;
+            }
+            $this->menu = $menu;
+            $this->navbar = $navbar;
+        }
     }
 
     /**

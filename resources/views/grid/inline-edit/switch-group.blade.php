@@ -1,11 +1,11 @@
 
 <tr style="height: 28px;">
     <td><strong><small>{{ $label }}:</small></strong>&nbsp;&nbsp;&nbsp;</td>
-    <td><input type="checkbox" class="{{ $class }}" {{ $checked }} data-key="{{ $key }}" /></td>
+    <td><input type="checkbox" class="{{ $class }} {{ $controlClass ?? $class }}" {{ $checked }} data-key="{{ $key }}" /></td>
 </tr>
 
 <script>
-    $('.{{ $class }}').bootstrapSwitch({
+    $('.{{ $controlClass ?? $class }}').bootstrapSwitch({
         size:'mini',
         onText: '{{ $states['on']['text'] }}',
         offText: '{{ $states['off']['text'] }}',

@@ -1,0 +1,6 @@
+services:
+  application:
+    tmpfs:
+      - /tmp
+      - /host/bootstrap/cache
+      - /host/storage/framework/views

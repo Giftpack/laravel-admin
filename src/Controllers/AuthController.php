@@ -30,7 +30,7 @@ class AuthController extends Controller
             return redirect($this->redirectPath());
         }
 
-        return view($this->loginView);
+        return view($this->loginView, ['username' => $this->username()]);
     }
 
     /**
@@ -45,13 +45,13 @@ class AuthController extends Controller
         $this->loginValidator($request->all())->validate();
 
         $credentials = $request->only([$this->username(), 'password']);
-        $remember = $request->get('remember', false);
+        $remember = config('admin.auth.remember', true) && $request->boolean('remember');
 
         if ($this->guard()->attempt($credentials, $remember)) {
             return $this->sendLoginResponse($request);
         }
 
-        return back()->withInput()->withErrors([
+        return back()->withInput($request->only([$this->username(), 'remember']))->withErrors([
             $this->username() => $this->getFailedLoginMessage(),
         ]);
     }
@@ -78,9 +78,15 @@ class AuthController extends Controller
      */
     public function getLogout(Request $request)
     {
+        // Only POST may mutate identity; Laravel also routes HEAD through GET routes.
+        if (!$request->isMethod('post')) {
+            return redirect(admin_url('auth/login'));
+        }
+
         $this->guard()->logout();
 
         $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return redirect(config('admin.route.prefix'));
     }
@@ -125,31 +131,38 @@ class AuthController extends Controller
      */
     protected function settingForm()
     {
-        $class = config('admin.database.users_model');
+        $guard = config('admin.auth.guard') ?: 'admin';
+        $provider = config("auth.guards.$guard.provider");
+        $class = config("auth.providers.$provider.model", config('admin.database.users_model'));
 
         $form = new Form(new $class());
 
-        $form->display('username', trans('admin.username'));
+        $form->display($this->username(), trans('admin.username'));
         $form->text('name', trans('admin.name'))->rules('required');
-        $form->image('avatar', trans('admin.avatar'));
-        $form->password('password', trans('admin.password'))->rules('confirmed|required');
-        $form->password('password_confirmation', trans('admin.password_confirmation'))->rules('required')
-            ->default(function ($form) {
-                return $form->model()->password;
-            });
+        $form->image('avatar', trans('admin.avatar'))->removable();
+        $form->password('password', trans('admin.password'))->rules('nullable|confirmed')
+            ->customFormat(fn () => '');
+        $form->password('password_confirmation', trans('admin.password_confirmation'));
 
         $form->setAction(admin_url('auth/setting'));
 
         $form->ignore(['password_confirmation']);
 
         $form->saving(function (Form $form) {
-            if ($form->password && $form->model()->password != $form->password) {
+            if ($form->password === null || $form->password === '') {
+                $form->password = $form->model()->getAuthPassword();
+            } else {
                 $form->password = Hash::make($form->password);
             }
         });
 
         $form->saved(function () {
             admin_toastr(trans('admin.update_succeeded'));
+
+            if (request()->ajax() && request()->input('avatar') === \Encore\Admin\Form\Field::FILE_DELETE_FLAG
+                && request()->has(\Encore\Admin\Form\Field::FILE_DELETE_FLAG)) {
+                return; // The upload plugin requires Form's normal JSON success response.
+            }
 
             return redirect(admin_url('auth/setting'));
         });
@@ -204,7 +217,7 @@ class AuthController extends Controller
      */
     protected function username()
     {
-        return 'username';
+        return config('admin.auth.username', 'username');
     }
 
     /**

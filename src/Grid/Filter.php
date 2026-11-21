@@ -521,6 +521,13 @@ class Filter implements Renderable
         return $this->model->addConditions($conditions)->buildData($toArray);
     }
 
+    /** Build the same filtered/scoped query for streaming exporters without fetching rows. */
+    public function getExportQuery()
+    {
+        return $this->model->addConditions(array_merge($this->conditions(), $this->scopeConditions()))
+            ->getQueryBuilder();
+    }
+
     /**
      * @param callable $callback
      * @param int      $count

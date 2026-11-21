@@ -28,6 +28,21 @@ abstract class AbstractDisplayer
      */
     protected $value;
 
+    protected $escapeText = true;
+
+    /** Explicit callback/displayer output remains trusted HTML when chained. */
+    public function escapeText(bool $escape): self
+    {
+        $this->escapeText = $escape;
+
+        return $this;
+    }
+
+    protected function displayText($value)
+    {
+        return $this->escapeText ? e($value) : $value;
+    }
+
     /**
      * Create a new displayer instance.
      *
@@ -114,6 +129,14 @@ abstract class AbstractDisplayer
         return $this->getColumn()->getClassName();
     }
 
+    /** Internal DOM/handler identity; public column CSS classes remain unchanged. */
+    protected function getControlId(string $suffix = ''): string
+    {
+        return 'grid-control-'.hash('sha256', implode('|', [
+            $this->grid->tableID, $this->getResource(), $this->getName(), (string) $this->getKey(), $suffix,
+        ]));
+    }
+
     /**
      * `foo.bar.baz` => `foo[bar][baz]`.
      *
@@ -145,5 +168,31 @@ abstract class AbstractDisplayer
      *
      * @return mixed
      */
+    protected function sanitizeUrl($value, bool $image = false): string
+    {
+        $value = trim((string) $value);
+        $normalized = preg_replace('/[\x00-\x20]/', '', $value);
+        if (preg_match('/^(?:javascript|vbscript|data):/i', $normalized)
+            && !($image && preg_match('/^data:image\//i', $normalized))) {
+            return '#';
+        }
+
+        return $value;
+    }
+
+    protected function escapeUrl($value, bool $image = false): string
+    {
+        return e($this->sanitizeUrl($value, $image));
+    }
+
+    protected function callModelCallback(\Closure $callback, array $arguments = [])
+    {
+        if ((new \ReflectionFunction($callback))->isStatic()) {
+            throw new \InvalidArgumentException('Grid displayer callbacks must be non-static because they are bound to the row model.');
+        }
+
+        return $callback->call($this->row, ...$arguments);
+    }
+
     abstract public function display();
 }

@@ -32,6 +32,7 @@ class SwitchDisplay extends AbstractDisplayer
 
         return Admin::component('admin::grid.inline-edit.switch', [
             'class'    => 'grid-switch-'.str_replace('.', '-', $this->getName()),
+            'controlClass' => 'grid-switch-'.$this->getControlId(),
             'key'      => $this->getKey(),
             'resource' => $this->getResource(),
             'name'     => $this->getPayloadName(),

@@ -1,0 +1,28 @@
+name: PHP 8.5 package behavior
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  behavior:
+    name: Laravel ${{ matrix.dependencies }} / ${{ matrix.database }} / PHP 8.5
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        dependencies: [lowest, current]
+        database: [pgsql, mysql]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned runtime and install frozen independent graphs
+        run: scripts/ci-prepare-dependencies "${{ matrix.dependencies }}"
+      - name: Full package suite and real optional integration fixtures
+        run: scripts/ci-release-lane "${{ matrix.dependencies }}" "${{ matrix.database }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: php85-${{ matrix.dependencies }}-${{ matrix.database }}
+          path: .scratch/php85-laravel13-upgrade/artifacts/issue20-ci-*
+          if-no-files-found: error

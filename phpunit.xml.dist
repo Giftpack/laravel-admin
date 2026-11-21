@@ -1,26 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit backupGlobals="false"
-         backupStaticAttributes="false"
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.5/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
-         convertErrorsToExceptions="true"
-         convertNoticesToExceptions="true"
-         convertWarningsToExceptions="true"
-         processIsolation="false"
-         stopOnFailure="true"
-         verbose="true"
-        >
+         cacheResult="false"
+         failOnWarning="true">
     <testsuites>
         <testsuite name="all">
-            <directory>tests/</directory>
+            <directory suffix="Test.php">tests/</directory>
         </testsuite>
     </testsuites>
     <php>
-        <env name="DB_CONNECTION" value="pgsql"/>
-        <env name="DB_HOST" value="laravel-admin-postgres"/>
-        <env name="DB_DATABASE" value="laravel_admin_test"/>
-        <env name="DB_USER" value="laravel_admin_test"/>
-        <env name="DB_PASSWORD" value="secret"/>
-        <ini name="memory_limit" value="-1"/>
+        <env name="APP_ENV" value="testing"/>
+        <ini name="memory_limit" value="512M"/>
     </php>
 </phpunit>

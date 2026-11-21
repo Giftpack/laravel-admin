@@ -53,7 +53,7 @@ class Sorter implements Renderable
     {
         $this->sort = \request()->get($this->sortName);
 
-        if (empty($this->sort)) {
+        if (!is_array($this->sort) || !isset($this->sort['type']) || !is_string($this->sort['type']) || !in_array($this->sort['type'], ['asc', 'desc'], true)) {
             return false;
         }
 
@@ -84,6 +84,8 @@ class Sorter implements Renderable
         $query = array_merge($query, [$this->sortName => $sort]);
 
         $url = url()->current().'?'.http_build_query($query);
+
+        $url = e($url);
 
         return "<a class=\"fa fa-fw $icon\" href=\"$url\"></a>";
     }

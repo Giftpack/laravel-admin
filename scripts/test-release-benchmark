@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+mode=${1:-candidate}; engine=${2:-pgsql}
+case "$mode" in baseline|candidate) ;; *) exit 2;; esac
+case "$engine" in pgsql) host=postgres; port=5432;; mysql) host=mysql; port=3306;; *) exit 2;; esac
+project="laravel-admin-grid-benchmark-$(date +%s)-$$"
+export TEST_DB_CONNECTION="$engine" TEST_DB_HOST="$host" TEST_DB_PORT="$port" TEST_RESULTS_DIR="$(pwd)/.scratch/php85-laravel13-upgrade/artifacts"
+cleanup() { docker compose --env-file /dev/null -p "$project" down --volumes --remove-orphans >/dev/null; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+docker compose --env-file /dev/null -p "$project" up -d --wait "$host"
+if [ "$mode" = baseline ]; then
+    snapshot="$(pwd)/.scratch/php85-laravel13-upgrade/issue10-baseline-root"
+    [ -f "$snapshot/src/Grid.php" ] && [ -f "$(pwd)/.scratch/php85-laravel13-upgrade/baseline-vendor/autoload.php" ]
+    docker compose --env-file /dev/null -p "$project" run --rm --no-deps -v "$snapshot:/application:ro" -v "$(pwd)/.scratch/php85-laravel13-upgrade/baseline-vendor:/application/vendor:ro" -v "$(pwd)/tests:/application/tests:ro" -v "$(pwd)/scripts:/application/scripts:ro" application php scripts/benchmark-release.php baseline
+else
+    docker compose --env-file /dev/null -p "$project" run --rm --no-deps application php scripts/benchmark-release.php candidate
+fi

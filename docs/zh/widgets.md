@@ -154,3 +154,15 @@ echo $table->render();
 
 ```
 
+
+
+### PHP 8.5 / Laravel 13 請求與步驟狀態
+
+步驟表單現在同時產生儲存在 session 的 `_step_context` 與已簽署的 widget `_context`；自訂模板需保留這兩個隱藏欄位。驗證規則建立前，伺服器會還原已核准的步驟清單、目前步驟與導向 URL，不採信客戶端修改的 `_url`、`_current`、`_steps`。`next($data)` 保留傳入的核准資料；驗證失敗不清除先前步驟。尚未儲存的步驟仍可使用建構子預設資料。
+
+流程資料改存於依伺服器 URL 與步驟清單區隔的 `admin_steps`。`clear()` 只移除該流程及其導覽 context，保留其他流程及主程式 session（包含主程式自己的 `steps`）。舊的未區隔 `steps` 資料不自動搬移，升級時需重新顯示步驟表單。預設 PHP session 與明確選用的 JSON session 皆有驗證，沒有進行使用端 session 格式遷移。
+
+Admin bootstrap middleware 在每次完成或失敗後還原頁面 scripts、styles、標題、導覽與選單；應用程式註冊的擴充 callback 與基礎 assets 仍保留。Show 內建 label、badge、link 會轉義直接儲存的文字；明確自訂 callback HTML 與 `unescape()` 維持信任輸出，URL 屬性另外轉義。關閉 debug 時只顯示一般失敗提示，debug 詳情也會轉義。PJAX 保留失敗 HTTP 狀態、重新導向、JSON、下載及串流；找不到容器或 selector 無效時保留完整 HTML 供導覽回退。
+
+
+流程身分包含完整的伺服器步驟鍵與表單類別對應，所以同一個 URL 上不同流程可重複使用步驟名稱。若同一份定義需要獨立的多個副本，請在 `MultipleSteps` 建構子或 `make()` 的第三個參數傳入不同且穩定的伺服器 ID，例如 `MultipleSteps::make($steps, $current, 'billing')` 與 `'shipping'`，後續請求沿用相同 ID。直接建立跨類別 StepForm 時，所有步驟須使用相同的 `setWorkflow('stable-server-id')`。沒有獨立 ID 的相同定義會共用一個流程，不宣稱自動隔離所有物件實例。

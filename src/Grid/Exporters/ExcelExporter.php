@@ -7,14 +7,13 @@ use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 
+if (!interface_exists(FromQuery::class) || !trait_exists(Exportable::class)) {
+    throw new \LogicException('Excel export requires the optional maatwebsite/excel ^4.0 package.');
+}
+
 abstract class ExcelExporter extends AbstractExporter implements FromQuery, WithHeadings
 {
     use Exportable;
-
-    /**
-     * @var string
-     */
-    protected $fileName;
 
     /**
      * @var array
@@ -41,7 +40,7 @@ abstract class ExcelExporter extends AbstractExporter implements FromQuery, With
     /**
      * @return \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Model
      */
-    public function query()
+    public function query(): \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Relations\Relation
     {
         if (!empty($this->columns)) {
             $columns = array_keys($this->columns);

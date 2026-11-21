@@ -159,12 +159,24 @@ class EmbeddedForm
      */
     public function prepare($input)
     {
-        foreach ($input as $key => $record) {
-            $this->setFieldOriginalValue($key);
-            $input[$key] = $this->prepareValue($key, $record);
+        // Embedded updates are partial; omitted keys retain their stored values.
+        $prepared = (array) $this->original;
+        foreach ($this->fields as $field) {
+            $field->setOriginal((array) $this->original);
+            $columns = $field->column();
+            if ($field->isReadOnly() || !Arr::has($input, $columns)) {
+                continue;
+            }
+            $value = is_array($columns)
+                ? array_map(fn ($column) => Arr::get($input, $column), $columns)
+                : Arr::get($input, $columns);
+            $value = $field->prepare($value);
+            foreach ((array) $columns as $index => $column) {
+                Arr::set($prepared, $column, is_array($columns) ? $value[$index] : $value);
+            }
         }
 
-        return $input;
+        return $prepared;
     }
 
     /**
@@ -238,12 +250,12 @@ class EmbeddedForm
         if (is_array($jsonKey)) {
             foreach ($jsonKey as $index => $name) {
                 $elementName[$index] = "{$this->column}[$name]";
-                $errorKey[$index] = "{$this->column}.$name";
+                $errorKey[$index] = trim(str_replace(['[', ']'], ['.', ''], "{$this->column}.$name"), '.');
                 $elementClass[$index] = "{$this->column}_$name";
             }
         } else {
             $elementName = "{$this->column}[$jsonKey]";
-            $errorKey = "{$this->column}.$jsonKey";
+            $errorKey = trim(str_replace(['[', ']'], ['.', ''], "{$this->column}.$jsonKey"), '.');
             $elementClass = "{$this->column}_$jsonKey";
         }
 

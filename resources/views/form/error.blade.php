@@ -1,10 +1,10 @@
 @if(is_array($errorKey))
     @foreach($errorKey as $key => $col)
-        @if($errors->has($col.$key))
-            @foreach($errors->get($col.$key) as $message)
+        @foreach(array_unique([$col, $col.$key]) as $projectedErrorKey)
+            @foreach($errors->get($projectedErrorKey) as $message)
                 <label class="control-label" for="inputError"><i class="fa fa-times-circle-o"></i> {{$message}}</label><br/>
             @endforeach
-        @endif
+        @endforeach
     @endforeach
 @else
     @if($errors->has($errorKey))

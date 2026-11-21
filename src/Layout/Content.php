@@ -45,7 +45,7 @@ class Content implements Renderable
      *
      * @param Closure|null $callback
      */
-    public function __construct(\Closure $callback = null)
+    public function __construct(?\Closure $callback = null)
     {
         if ($callback instanceof Closure) {
             $callback($this);
@@ -209,17 +209,20 @@ class Content implements Renderable
      */
     public function build()
     {
+        $bufferLevel = ob_get_level();
         ob_start();
 
-        foreach ($this->rows as $row) {
-            $row->build();
+        try {
+            foreach ($this->rows as $row) {
+                $row->build();
+            }
+
+            return ob_get_contents();
+        } finally {
+            while (ob_get_level() > $bufferLevel) {
+                ob_end_clean();
+            }
         }
-
-        $contents = ob_get_contents();
-
-        ob_end_clean();
-
-        return $contents;
     }
 
     /**

@@ -5,8 +5,6 @@ namespace Encore\Admin;
 use Encore\Admin\Auth\Database\Permission;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -58,7 +56,7 @@ abstract class Extension
      *
      * @var Extension
      */
-    protected static $instance;
+    protected static $instance = [];
 
     /**
      * The menu validation rules.
@@ -219,7 +217,7 @@ abstract class Extension
      */
     public static function config($key = null, $default = null)
     {
-        $name = array_search(get_called_class(), Admin::$extensions);
+        $name = static::getInstance()->name;
 
         if (is_null($key)) {
             $key = sprintf('admin.extensions.%s', strtolower($name));
@@ -236,7 +234,16 @@ abstract class Extension
     public static function import()
     {
         $extension = static::getInstance();
-        DB::transaction(function () use ($extension) {
+        if ($extension->disabled()) {
+            throw new \LogicException('Cannot import a disabled extension.');
+        }
+        $menuModel = config('admin.database.menu_model');
+        $permissionModel = config('admin.database.permissions_model');
+        $connection = (new $menuModel())->getConnection();
+        if ($connection !== (new $permissionModel())->getConnection()) {
+            throw new \LogicException('Extension imports require the same menu and permission connection.');
+        }
+        $connection->transaction(function () use ($extension) {
             if ($menu = $extension->menu()) {
                 if ($extension->validateMenu($menu)) {
                     extract($menu);
@@ -292,7 +299,7 @@ abstract class Extension
     {
         return [
             'title'    => 'required',
-            'path'     => ['required', Rule::unique(Config::get('admin.database.menu_table'), 'uri')],
+            'path'     => 'required|string',
             'icon'     => 'required',
             'children' => 'nullable|array',
         ];
@@ -334,7 +341,7 @@ abstract class Extension
     {
         return [
             'name'     => 'required',
-            'slug'     => ['required', Rule::unique(Config::get('admin.database.permissions_table'), 'slug')],
+            'slug'     => 'required|string',
             'path'     => 'required|array',
             'path.*'   => 'string',
             'method'   => 'nullable|array',
@@ -359,11 +366,15 @@ abstract class Extension
     {
         $menuModel = config('admin.database.menu_model');
 
+        $existing = $menuModel::where('uri', $uri)->first();
+        if ($existing && ((string) $existing->parent_id !== (string) $parentId || $existing->title !== $title || $existing->icon !== $icon)) {
+            throw new \LogicException('An existing menu conflicts with this extension import.');
+        }
         $lastOrder = $menuModel::max('order');
         /**
          * @var Model
          */
-        $menu = $menuModel::create([
+        $menu = $existing ?: $menuModel::create([
             'parent_id' => $parentId,
             'order'     => $lastOrder + 1,
             'title'     => $title,
@@ -398,11 +409,23 @@ abstract class Extension
     {
         $permissionModel = config('admin.database.permissions_model');
 
+        $attributes = [
+            'name' => $name,
+            'http_path' => str_replace("\r\n", "\n", '/'.trim($path, '/')),
+            'http_method' => array_map('strtoupper', $methods),
+        ];
+        $existing = $permissionModel::where('slug', $slug)->first();
+        if ($existing) {
+            if ($existing->name !== $attributes['name'] || $existing->http_path !== $attributes['http_path'] || $existing->http_method !== $attributes['http_method']) {
+                throw new \LogicException('An existing permission conflicts with this extension import.');
+            }
+            return;
+        }
         $permissionModel::create([
             'name'        => $name,
             'slug'        => $slug,
             'http_path'   => '/'.trim($path, '/'),
-            'http_method' => $methods,
+            'http_method' => $attributes['http_method'],
         ]);
     }
 
@@ -413,6 +436,10 @@ abstract class Extension
      */
     public static function routes($callback)
     {
+        if (static::getInstance()->disabled()) {
+            return;
+        }
+
         $attributes = array_merge(
             [
                 'prefix'     => config('admin.route.prefix'),

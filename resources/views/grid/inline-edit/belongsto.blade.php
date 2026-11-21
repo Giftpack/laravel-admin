@@ -56,10 +56,20 @@
             data: {
                 '{{ $name }}': selected.length ? selected : [''],
                 _token: LA.token,
-                _method: 'PUT'
+                _method: 'PUT',
+                _edit_inline: true
             },
             success: function (data) {
+                if (data.status === false) {
+                    toastr.error(data.message);
+                    return;
+                }
                 callback(data);
+            },
+            error: function (xhr) {
+                var data = xhr.responseJSON || {};
+                $modal.find('.selector-error').remove();
+                $('<div class="selector-error text-danger" role="alert">').text(data.message || Object.values(data.errors || {}).join(' ') || @json(__('admin.failed'))).prependTo($modal.find('.modal-body'));
             }
         });
     };
@@ -82,19 +92,19 @@
                     $(el).iCheck('toggle');
                 }
             });
-        });
+        }).fail(function () { $modal.find('.modal-body').text(@json(__('admin.failed'))); });
     };
 
-    $modal.on('show.bs.modal', function (e) {
+    $modal.off('.adminSelector').on('show.bs.modal.adminSelector', function (e) {
         $related = $(e.relatedTarget);
         selected = $related.data('val');
         load("{!! $url !!}");
-    }).on('ifChecked', 'input.select', function (e) {
+    }).on('ifChecked.adminSelector', 'input.select', function (e) {
         selected = $(this).val();
-    }).find('.modal-footer .submit').click(function () {
+    }).find('.modal-footer .submit').off('click.adminSelector').on('click.adminSelector',function () {
         update(function (data) {
             $related.data('val', selected);
-            $related.find('.text').html(data.display["{{ $name }}"]);
+            $related.find('.text').text(data.display["{{ $name }}"]);
             $related.find('a').toggleClass('text-green text-muted');
 
             setTimeout(function () {
@@ -125,31 +135,31 @@
                     $(el).iCheck('toggle');
                 }
             });
-        });
+        }).fail(function () { $modal.find('.modal-body').text(@json(__('admin.failed'))); });
     };
 
-    $modal.on('show.bs.modal', function (e) {
+    $modal.off('.adminSelector').on('show.bs.modal.adminSelector', function (e) {
         $related = $(e.relatedTarget);
-        selected = $related.data('val').map(function (value) {
+        selected = ($related.data('val') || []).map(function (value) {
             return value.toString();
         });
 
         load("{!! $url !!}");
-    }).on('ifChecked', 'input.select', function (e) {
+    }).on('ifChecked.adminSelector', 'input.select', function (e) {
         var val = $(this).val().toString();
         if (selected.indexOf(val) < 0) {
             selected.push(val);
         }
-    }).on('ifUnchecked', 'input.select', function (e) {
+    }).on('ifUnchecked.adminSelector', 'input.select', function (e) {
         var val = $(this).val().toString();
         var index = selected.indexOf(val);
         if (index !== -1) {
             selected.splice(index, 1);
         }
-    }).find('.modal-footer .submit').click(function () {
+    }).find('.modal-footer .submit').off('click.adminSelector').on('click.adminSelector',function () {
         update(function (data) {
             $related.data('val', selected);
-            $related.find('.text').html(data.display["{{ $name }}"]);
+            $related.find('.text').text(data.display["{{ $name }}"]);
             $related.find('a').toggleClass('text-green text-muted');
 
             setTimeout(function () {
@@ -163,13 +173,13 @@
     });
 @endif
 
-    $modal.on('click', '.page-item a, .filter-box a', function (e) {
+    $modal.on('click.adminSelector', '.page-item a, .filter-box a', function (e) {
         load($(this).attr('href'));
         e.preventDefault();
-    }).on('click', 'tr', function (e) {
+    }).on('click.adminSelector', 'tr', function (e) {
         $(this).find('input.select').iCheck('toggle');
         e.preventDefault();
-    }).on('submit', '.box-header form', function (e) {
+    }).on('submit.adminSelector', '.box-header form', function (e) {
         load($(this).attr('action')+'&'+$(this).serialize());
         e.preventDefault();
         return false;

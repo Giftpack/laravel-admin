@@ -143,6 +143,7 @@ trait HasFields
     public static function extend($abstract, $class)
     {
         static::$availableFields[$abstract] = $class;
+        static::$collectedAssets = [];
     }
 
     /**
@@ -166,6 +167,7 @@ trait HasFields
     public static function forget($abstract)
     {
         Arr::forget(static::$availableFields, $abstract);
+        static::$collectedAssets = [];
     }
 
     /**
@@ -184,7 +186,7 @@ trait HasFields
 
         $class = Arr::get(static::$availableFields, $method);
 
-        if (class_exists($class)) {
+        if (is_string($class) && class_exists($class)) {
             return $class;
         }
 

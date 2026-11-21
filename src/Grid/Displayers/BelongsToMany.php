@@ -23,10 +23,6 @@ class BelongsToMany extends BelongsTo
      */
     protected function getOtherKey()
     {
-        if (isset(static::$otherKey[$this->getName()])) {
-            return static::$otherKey[$this->getName()];
-        }
-
         $model = $this->getGrid()->model()->getOriginalModel();
 
         if (is_callable([$model, $this->getName()]) &&
@@ -36,7 +32,7 @@ class BelongsToMany extends BelongsTo
             $fullKey = $relation->getQualifiedRelatedPivotKeyName();
             $fullKeyArray = explode('.', $fullKey);
 
-            return static::$otherKey[$this->getName()] = end($fullKeyArray);
+            return end($fullKeyArray);
         }
 
         throw new \Exception('Column of this field must be a `BelongsToMany` relation.');

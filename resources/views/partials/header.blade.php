@@ -49,7 +49,10 @@
                                 <a href="{{ admin_url('auth/setting') }}" class="btn btn-default btn-flat">{{ trans('admin.setting') }}</a>
                             </div>
                             <div class="pull-right">
-                                <a href="{{ admin_url('auth/logout') }}" class="btn btn-default btn-flat">{{ trans('admin.logout') }}</a>
+                                <form method="POST" action="{{ admin_url('auth/logout') }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-default btn-flat">{{ trans('admin.logout') }}</button>
+                                </form>
                             </div>
                         </li>
                     </ul>

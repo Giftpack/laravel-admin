@@ -1,0 +1,8 @@
+{
+  "name": "laravel-admin-browser-acceptance",
+  "private": true,
+  "version": "1.0.0",
+  "devDependencies": {
+    "@playwright/cli": "0.1.25"
+  }
+}

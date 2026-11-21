@@ -1,7 +1,7 @@
-<input type="checkbox" class="{{ $class }}" {{ $checked }} data-key="{{ $key }}" />
+<input type="checkbox" class="{{ $class }} {{ $controlClass ?? $class }}" {{ $checked }} data-key="{{ $key }}" />
 
 <script>
-    $('.{{ $class }}').bootstrapSwitch({
+    $('.{{ $controlClass ?? $class }}').bootstrapSwitch({
         size:'mini',
         onText: '{{ $states['on']['text'] }}',
         offText: '{{ $states['off']['text'] }}',

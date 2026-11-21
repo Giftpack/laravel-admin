@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+lane=${1:-current};engine=${2:-pgsql}
+case "$lane" in current)suffix=;;lowest)suffix=-lowest;;*)exit 2;;esac
+case "$engine" in pgsql|mysql);;*)exit 2;;esac
+out=".scratch/php85-laravel13-upgrade/artifacts/issue20-ci-$lane-$engine"
+mkdir -p "$(dirname "$out")"
+# Each command owns unique disposable services; no allow-failures/continue-on-error or filtered core suite.
+scripts/test-dependency-container "$lane" "$engine" /host/vendor/bin/phpunit -c /application/phpunit.xml.dist --bootstrap /host/vendor/autoload.php --display-all-issues --log-junit "/results/issue20-ci-$lane-$engine.xml" > "$out-core.log" 2>&1
+scripts/test-optional-container "$engine" "optional$suffix" > "$out-optional.log" 2>&1
+scripts/test-optional-container "$engine" "optional$suffix" /application/scripts/probe-captcha.php > "$out-captcha.log" 2>&1
+scripts/test-dependency-container "$lane" "$engine" /application/scripts/probe-uploads-optional.php > "$out-image-absence.log" 2>&1
+scripts/test-dependency-container "$lane" "$engine" /application/scripts/probe-exports.php > "$out-csv.log" 2>&1
+scripts/test-export-container "$engine" "excel$suffix" > "$out-excel.log" 2>&1
+printf '%s\n' "Completed full core + optional + captcha + image absence + native CSV/Excel: $lane/$engine" > "$out-complete.log"

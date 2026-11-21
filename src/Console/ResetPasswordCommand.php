@@ -7,49 +7,37 @@ use Illuminate\Support\Facades\Hash;
 
 class ResetPasswordCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'admin:reset-password';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Reset password for a specific admin user';
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
-        $userModel = config('admin.database.users_model');
-
-        askForUserName:
-        $username = $this->ask('Please enter a username who needs to reset his password');
-
-        $user = $userModel::query()->where('username', $username)->first();
-
-        if (is_null($user)) {
-            $this->error('The user you entered is not exists');
-            goto askForUserName;
+        if (!$this->input->isInteractive()) {
+            $this->error('This command requires interactive input; passwords must be entered at the secret prompt.');
+            return self::INVALID;
         }
-
-        enterPassword:
-        $password = $this->secret('Please enter a password');
-
-        if ($password !== $this->secret('Please confirm the password')) {
-            $this->error('The passwords entered twice do not match, please re-enter');
-            goto enterPassword;
+        try {
+            $userClass = config('admin.database.users_model');
+            $username = $this->ask('Please enter a username who needs to reset his password');
+            $user = is_string($username) && trim($username) !== ''
+                ? $userClass::query()->where('username', $username)->first() : null;
+            if (!$user) {
+                $this->error('The requested admin user does not exist.');
+                return self::INVALID;
+            }
+            $password = $this->secret('Please enter a password', false);
+            $confirmation = $this->secret('Please confirm the password', false);
+            if (!is_string($password) || trim($password) === '' || $password !== $confirmation) {
+                $this->error('A nonempty matching password and confirmation are required.');
+                return self::INVALID;
+            }
+            $user->password = Hash::make($password);
+            $user->save();
+        } catch (\Throwable $exception) {
+            $this->error('Unable to reset the admin password.');
+            return self::FAILURE;
         }
-
-        $user->password = Hash::make($password);
-
-        $user->save();
-
         $this->info('User password reset successfully.');
+        return self::SUCCESS;
     }
 }

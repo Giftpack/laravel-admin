@@ -59,7 +59,8 @@ class MultipleFile extends Field
      */
     public function getValidator(array $input)
     {
-        if (request()->has(static::FILE_DELETE_FLAG)) {
+        if ($this->deletingUpload($input) || (is_string(Arr::get($input, $this->column))
+            && Arr::has($input, static::FILE_SORT_FLAG.'.'.$this->column))) {
             return false;
         }
 
@@ -67,11 +68,10 @@ class MultipleFile extends Field
             return $this->validator->call($this, $input);
         }
 
+        if ($this->original()) $this->removeRule('required');
         $attributes = [];
 
-        if (!$fieldRules = $this->getRules()) {
-            return false;
-        }
+        $fieldRules = $this->getRules();
 
         $attributes[$this->column] = $this->label;
 
@@ -96,7 +96,7 @@ class MultipleFile extends Field
         $rules = $input = [];
 
         foreach ($value as $key => $file) {
-            $rules[$this->column.$key] = $this->getRules();
+            $rules[$this->column.$key] = array_merge(['file'], $this->getRules());
             $input[$this->column.$key] = $file;
         }
 
@@ -112,16 +112,19 @@ class MultipleFile extends Field
      */
     protected function sortFiles($order)
     {
-        $order = explode(',', $order);
-
-        $new = [];
-        $original = $this->original();
-
-        foreach ($order as $item) {
-            $new[] = Arr::get($original, $item);
+        if (!$this->validFileOrder($order)) {
+            throw new \InvalidArgumentException('Invalid upload order.');
         }
+        return array_map(fn ($key) => $this->original()[$key], explode(',', $order));
+    }
 
-        return $new;
+    protected function validFileOrder($order): bool
+    {
+        if (!is_string($order)) return false;
+        $keys = explode(',', $order);
+        $expected = array_map('strval', array_keys($this->original()));
+        sort($keys); sort($expected);
+        return $keys === $expected;
     }
 
     /**
@@ -133,7 +136,12 @@ class MultipleFile extends Field
      */
     public function prepare($files)
     {
-        if (request()->has(static::FILE_DELETE_FLAG)) {
+        return $this->prepareUploadSafely(fn () => $this->prepareUpload($files));
+    }
+
+    protected function prepareUpload($files)
+    {
+        if ($this->deletingUpload(request()->all())) {
             if ($this->pathColumn) {
                 return $this->destroyFromHasMany(request(static::FILE_DELETE_FLAG));
             }
@@ -147,11 +155,14 @@ class MultipleFile extends Field
 
         $targets = array_map([$this, 'prepareForeach'], $files);
 
-        // for create or update
         if ($this->pathColumn) {
-            $targets = array_map(function ($target) {
-                return [$this->pathColumn => $target];
-            }, $targets);
+            $existing = collect($this->original())->keyBy($this->getRelatedKeyName())->all();
+            foreach ($targets as $target) {
+                // Positional array indexes are not existing related model identities.
+                $existing['new_upload_'.bin2hex(random_bytes(8))] = [$this->pathColumn => $target];
+            }
+
+            return $existing;
         }
 
         return array_merge($this->original(), $targets);
@@ -176,7 +187,7 @@ class MultipleFile extends Field
      *
      * @return mixed|string
      */
-    protected function prepareForeach(UploadedFile $file = null)
+    protected function prepareForeach(?UploadedFile $file = null)
     {
         $this->name = $this->getStoreName($file);
 
@@ -360,25 +371,22 @@ EOT;
      *
      * @return array
      */
-    public function destroy($key)
+    public function destroy($key = null)
     {
         $files = $this->original ?: [];
 
-        $path = Arr::get($files, $key);
-
-        if (!$this->retainable && $this->storage->exists($path)) {
-            /* If this field class is using ImageField trait i.e MultipleImage field,
-            we loop through the thumbnails to delete them as well. */
-
-            if (isset($this->thumbnails) && method_exists($this, 'destroyThumbnailFile')) {
-                foreach ($this->thumbnails as $name => $_) {
-                    $this->destroyThumbnailFile($path, $name);
+        $keys = $key === null ? array_keys($files) : [$key];
+        foreach ($keys as $index) {
+            $path = Arr::get($files, $index);
+            if ($this->pathColumn && is_array($path)) $path = Arr::get($path, $this->pathColumn);
+            if (is_string($path)) {
+                if (method_exists($this, 'destroyThumbnailFile')) {
+                    foreach ($this->thumbnails as $name => $_) $this->destroyThumbnailFile($path, $name);
                 }
+                $this->deleteStoredFile($path);
             }
-            $this->storage->delete($path);
+            unset($files[$index]);
         }
-
-        unset($files[$key]);
 
         return $files;
     }
@@ -396,8 +404,11 @@ EOT;
 
         $path = Arr::get($files, "{$key}.{$this->pathColumn}");
 
-        if (!$this->retainable && $this->storage->exists($path)) {
-            $this->storage->delete($path);
+        if (is_string($path)) {
+            if (method_exists($this, 'destroyThumbnailFile')) {
+                foreach ($this->thumbnails as $name => $_) $this->destroyThumbnailFile($path, $name);
+            }
+            $this->deleteStoredFile($path);
         }
 
         $files[$key][Form::REMOVE_FLAG_NAME] = 1;

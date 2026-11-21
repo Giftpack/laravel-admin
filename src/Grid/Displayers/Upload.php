@@ -12,7 +12,7 @@ class Upload extends AbstractDisplayer
             'key'      => $this->getKey(),
             'name'     => $this->getPayloadName(),
             'value'    => $this->getValue(),
-            'target'   => "inline-upload-{$this->getKey()}",
+            'target'   => 'inline-upload-'.hash('sha256', $this->grid->tableID.'|'.$this->getResource().'|'.$this->getName().'|'.$this->getKey()),
             'resource' => $this->getResource(),
             'multiple' => $multiple,
         ]);

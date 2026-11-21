@@ -38,10 +38,9 @@ class PerPageSelector extends AbstractTool
     {
         $this->perPageName = $this->grid->model()->getPerPageName();
 
-        $this->perPage = (int) \request()->input(
-            $this->perPageName,
-            $this->grid->perPage
-        );
+        $paginator = $this->grid->model()->eloquent();
+        $this->perPage = $paginator instanceof \Illuminate\Pagination\LengthAwarePaginator
+            ? $paginator->perPage() : $this->grid->model()->getPerPage();
     }
 
     /**
@@ -70,6 +69,8 @@ class PerPageSelector extends AbstractTool
         $options = $this->getOptions()->map(function ($option) {
             $selected = ($option == $this->perPage) ? 'selected' : '';
             $url = \request()->fullUrlWithQuery([$this->perPageName => $option]);
+
+            $url = e($url);
 
             return "<option value=\"$url\" $selected>$option</option>";
         })->implode("\r\n");

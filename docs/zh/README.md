@@ -1,3 +1,5 @@
+> 此checkout文件對應未發布PHP8.5／Laravel13的2.0候選。先閱讀[安裝](installation.md)與[既有主機升級／回復](upgrade.md)，以下舊範例保留歷史脈絡。
+
 # laravel-admin
 
 [![Build Status](https://travis-ci.org/z-song/laravel-admin.svg?branch=master)](https://travis-ci.org/z-song/laravel-admin)

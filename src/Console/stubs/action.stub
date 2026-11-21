@@ -2,14 +2,12 @@
 
 namespace DummyNamespace;
 
-use Encore\Admin\Actions\Action;
-use Illuminate\Http\Request;
 
-class DummyClass extends Action
+class DummyClass extends \Encore\Admin\Actions\Action
 {
     protected $selector = '.DummySelector';
 
-    public function handle(Request $request)
+    public function handle(\Illuminate\Http\Request $request)
     {
         // $request ...
 
@@ -18,8 +16,6 @@ class DummyClass extends Action
 DummyInteractor
     public function html()
     {
-        return <<<HTML
-        <a class="btn btn-sm btn-default DummySelector">DummyName</a>
-HTML;
+        return 'DummyMarkup';
     }
 }

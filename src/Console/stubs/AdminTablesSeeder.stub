@@ -1,62 +1,83 @@
 <?php
 
-namespace Database\Seeders;
+namespace DummyNamespace;
 
-use DB;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class DummyClass extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
-    public function run()
+    private array $snapshot = DummySnapshot;
+
+    public function run(): void
     {
-        // base tables
-        \ClassMenu::truncate();
-        \ClassMenu::insert(
-            ArrayMenu
-        );
-
-        \ClassPermission::truncate();
-        \ClassPermission::insert(
-            ArrayPermission
-        );
-
-        \ClassRole::truncate();
-        \ClassRole::insert(
-            ArrayRole
-        );
-
-        // pivot tables
-        DB::table('TableRoleMenu')->truncate();
-        DB::table('TableRoleMenu')->insert(
-            ArrayPivotRoleMenu
-        );
-
-        DB::table('TableRolePermissions')->truncate();
-        DB::table('TableRolePermissions')->insert(
-            ArrayPivotRolePermissions
-        );
-
-        // users tables
-        \ClassUsers::truncate();
-        \ClassUsers::insert(
-            ArrayUsers
-        );
-
-        DB::table('TableRoleUsers')->truncate();
-        DB::table('TableRoleUsers')->insert(
-            ArrayPivotRoleUsers
-        );
-
-        DB::table('TablePermissionsUsers')->truncate();
-        DB::table('TablePermissionsUsers')->insert(
-            ArrayPivotPermissionsUsers
-        );
-
-        // finish
+        $connection = DB::connection(config('admin.database.connection') ?: null);
+        $schema = $connection->getSchemaBuilder();
+        $tables = [];
+        $identities = [];
+        // Preflight every destination before any write. This is an admin-only snapshot,
+        // not a database restore; only explicitly configured included tables are touched.
+        foreach ($this->snapshot as $key => $data) {
+            $table = config('admin.database.'.$key);
+            if (!is_string($table) || $table === '' || in_array($table, $tables, true)) {
+                throw new \RuntimeException('Invalid or duplicate admin snapshot destination.');
+            }
+            $columns = $schema->getColumns($table);
+            if (array_diff($data['columns'], array_column($columns, 'name'))) {
+                throw new \RuntimeException('Admin snapshot columns do not match the destination.');
+            }
+            if ($connection->table($table)->exists()
+                && !($this->command && $this->command->option('force'))) {
+                throw new \RuntimeException('Admin destination is not empty; use db:seed --force to authorize replacement.');
+            }
+            $tables[$key] = $table;
+            $identities[$key] = array_column(array_filter($columns, fn ($column) => $column['auto_increment']), 'name');
+        }
+        // A snapshot without users must preserve the validity of unexported direct/role
+        // grants. Refuse replacement rather than leaving dangling user pivot records.
+        if (!array_key_exists('users_table', $this->snapshot)) {
+            foreach (['role_users_table' => ['roles_table', 'role_id'], 'user_permissions_table' => ['permissions_table', 'permission_id']] as $pivotKey => [$baseKey, $foreignKey]) {
+                $pivot = config('admin.database.'.$pivotKey);
+                if (is_string($pivot) && $schema->hasTable($pivot)) {
+                    $ids = array_column($this->snapshot[$baseKey]['rows'], 'id');
+                    $query = $connection->table($pivot);
+                    if ($ids) {
+                        $query->whereNotIn($foreignKey, $ids);
+                    }
+                    if ($query->exists()) {
+                        throw new \RuntimeException('Snapshot replacement would orphan unexported user grants; export with --users or reconcile them first.');
+                    }
+                }
+            }
+        }
+        try {
+            $connection->transaction(function () use ($connection, $tables, $identities) {
+                // Pivot rows are deleted first, then base rows. DELETE remains transactional
+                // on both supported engines, unlike MySQL TRUNCATE.
+                $pivots = ['role_menu_table', 'role_permissions_table', 'role_users_table', 'user_permissions_table'];
+                $deleteKeys = array_merge(array_intersect($pivots, array_keys($tables)), array_diff(array_keys($tables), $pivots));
+                foreach ($deleteKeys as $key) {
+                    $connection->table($tables[$key])->delete();
+                }
+                $insertKeys = array_merge(array_diff(array_keys($tables), $pivots), array_intersect($pivots, array_keys($tables)));
+                foreach ($insertKeys as $key) {
+                    foreach (array_chunk($this->snapshot[$key]['rows'], 500) as $rows) {
+                        $connection->table($tables[$key])->insert($rows);
+                    }
+                    if ($connection->getDriverName() === 'pgsql') {
+                        foreach ($identities[$key] as $column) {
+                            $sequence = $connection->scalar('select pg_get_serial_sequence(?, ?)', [$connection->getQueryGrammar()->wrapTable($tables[$key]), $column]);
+                            if ($sequence !== null) {
+                                $maximum = $connection->table($tables[$key])->max($column);
+                                $connection->select('select setval(?::regclass, ?, ?)', [$sequence, $maximum ?? 1, $maximum !== null]);
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (\Throwable $exception) {
+            // Query exception bindings may include exported hashes or tokens.
+            throw new \RuntimeException('Admin snapshot import failed; its data transaction was rolled back.');
+        }
     }
 }

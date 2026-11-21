@@ -35,6 +35,14 @@ if (!function_exists('admin_url')) {
 
         $secure = $secure ?: (config('admin.https') || config('admin.secure'));
 
+        if ($domain = config('admin.route.domain')) {
+            // A configured admin domain must not change the host's shared URL generator.
+            $generator = clone app('url');
+            $generator->useOrigin(($secure ? 'https' : 'http').'://'.$domain);
+
+            return $generator->to(admin_base_path($path), $parameters, $secure);
+        }
+
         return url(admin_base_path($path), $parameters, $secure);
     }
 }
@@ -53,7 +61,7 @@ if (!function_exists('admin_base_path')) {
 
         $prefix = ($prefix == '/') ? '' : $prefix;
 
-        $path = trim($path, '/');
+        $path = trim($path ?? '', '/');
 
         if (is_null($path) || strlen($path) == 0) {
             return $prefix ?: '/';
@@ -148,6 +156,20 @@ if (!function_exists('admin_asset')) {
      */
     function admin_asset($path)
     {
+        // Fingerprint actual published package bytes, including host overrides.
+        // External URLs and host assets retain their existing URL contract.
+        if (is_string($path) && !str_starts_with($path, '//') && !filter_var($path, FILTER_VALIDATE_URL)) {
+            $relative = ltrim((string) parse_url($path, PHP_URL_PATH), '/');
+            if (str_starts_with($relative, 'vendor/laravel-admin/') && is_file(public_path($relative))) {
+                $fragment = '';
+                if (($position = strpos($path, '#')) !== false) {
+                    $fragment = substr($path, $position);
+                    $path = substr($path, 0, $position);
+                }
+                $path .= (str_contains($path, '?') ? '&' : '?').'v='.hash_file('sha256', public_path($relative)).$fragment;
+            }
+        }
+
         return (config('admin.https') || config('admin.secure')) ? secure_asset($path) : asset($path);
     }
 }
@@ -291,7 +313,7 @@ if (!function_exists('prepare_options')) {
                 $value = $subArray['options'];
                 $original = array_merge($original, $subArray['original']);
                 $toReplace = array_merge($toReplace, $subArray['toReplace']);
-            } elseif (strpos($value, 'function(') === 0) {
+            } elseif (is_string($value) && strpos($value, 'function(') === 0) {
                 $original[] = $value;
                 $value = "%{$key}%";
                 $toReplace[] = "\"{$value}\"";
@@ -324,6 +346,6 @@ if (!function_exists('json_encode_options')) {
 if (!function_exists('admin_get_route')) {
     function admin_get_route(string $name): string
     {
-        return config('admin.route.prefix').'.'.$name;
+        return config('admin.route.name_prefix', 'admin').'.'.$name;
     }
 }

@@ -24,6 +24,11 @@ class Navbar implements Renderable
         ];
     }
 
+    public function __clone()
+    {
+        $this->elements = array_map(static fn ($elements) => clone $elements, $this->elements);
+    }
+
     /**
      * @param $element
      *
@@ -67,15 +72,16 @@ class Navbar implements Renderable
      */
     public function render($part = 'right')
     {
-        if ($part == 'right') {
-            $this->right(new RefreshButton());
-        }
-
-        if (!isset($this->elements[$part]) || $this->elements[$part]->isEmpty()) {
+        if (!isset($this->elements[$part])) {
             return '';
         }
 
-        return $this->elements[$part]->map(function ($element) {
+        $elements = clone $this->elements[$part];
+        if ($part === 'right') {
+            $elements->push(new RefreshButton());
+        }
+
+        return $elements->map(function ($element) {
             if ($element instanceof Htmlable) {
                 return $element->toHtml();
             }

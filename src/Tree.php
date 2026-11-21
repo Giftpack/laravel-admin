@@ -20,6 +20,13 @@ class Tree implements Renderable
     protected $elementId = 'tree-';
 
     /**
+     * Request path captured when the tree is constructed.
+     *
+     * @var string
+     */
+    public $path;
+
+    /**
      * @var Model
      */
     protected $model;
@@ -81,7 +88,7 @@ class Tree implements Renderable
      *
      * @param Model|null $model
      */
-    public function __construct(Model $model = null, \Closure $callback = null)
+    public function __construct(?Model $model = null, ?\Closure $callback = null)
     {
         $this->model = $model;
 
@@ -201,13 +208,33 @@ class Tree implements Renderable
      */
     public function saveOrder($serialize)
     {
+        if (!is_string($serialize)) {
+            throw new \InvalidArgumentException('Tree order must be JSON.');
+        }
+
         $tree = json_decode($serialize, true);
 
         if (json_last_error() != JSON_ERROR_NONE) {
             throw new \InvalidArgumentException(json_last_error_msg());
         }
 
-        $this->model->saveOrder($tree);
+        $shape = json_decode($serialize);
+        $validateLists = function ($branches) use (&$validateLists) {
+            if (!is_array($branches)) {
+                throw new \InvalidArgumentException('Tree order and children must be JSON lists.');
+            }
+            foreach ($branches as $branch) {
+                if (is_object($branch) && property_exists($branch, 'children')) {
+                    $validateLists($branch->children);
+                }
+            }
+        };
+        $validateLists($shape);
+
+        if ($this->queryCallback instanceof \Closure) {
+            $this->model->withQuery($this->queryCallback);
+        }
+        $this->model->saveTreeOrder($tree);
 
         return true;
     }

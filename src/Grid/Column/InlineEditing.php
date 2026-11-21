@@ -49,9 +49,15 @@ trait InlineEditing
      *
      * @return $this
      */
-    public function uplaodMany()
+    public function uploadMany()
     {
         return $this->displayUsing(Displayers\Upload::class, [true]);
+    }
+
+    /** @deprecated Use uploadMany(). */
+    public function uplaodMany()
+    {
+        return $this->uploadMany();
     }
 
     /**

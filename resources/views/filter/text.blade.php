@@ -1,7 +1,7 @@
 <div class="input-group input-group-sm">
     @if($group)
     <div class="input-group-btn">
-        <input type="hidden" name="{{ $id }}_group" class="{{ $group_name }}-operation" value="0"/>
+        <input type="hidden" name="{{ $group_field }}" class="{{ $group_name }}-operation" value="{{ $group_index }}"/>
         <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" style="min-width: 32px;">
             <span class="{{ $group_name }}-label">{{ $default['label'] }}</span>
             &nbsp;&nbsp;
@@ -18,5 +18,5 @@
             <i class="fa fa-{{ $icon }}"></i>
         </div>
 
-    <input type="{{ $type }}" class="form-control {{ $id }}" placeholder="{{$placeholder}}" name="{{$name}}" value="{{ request($name, $value) }}">
+    <input type="{{ $type }}" class="form-control {{ $id }}" placeholder="{{$placeholder}}" name="{{$name}}" value="{{ is_scalar($value) ? $value : (is_array($value) ? implode(',', array_filter($value, 'is_scalar')) : '') }}">
 </div>

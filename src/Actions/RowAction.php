@@ -110,9 +110,8 @@ abstract class RowAction extends GridAction
      */
     public function retrieveModel(Request $request)
     {
-        if (!$key = $request->get('_key')) {
-            return false;
-        }
+        $key = $request->input('_key');
+        abort_unless((is_string($key) || is_int($key)) && trim((string) $key) !== '', 403);
 
         $modelClass = str_replace('_', '\\', $request->get('_model'));
 

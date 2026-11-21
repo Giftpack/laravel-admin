@@ -26,6 +26,9 @@ class Label extends AbstractDisplayer
                 }
             }
 
+            $item = $this->displayText($item);
+            $style = e($style);
+
             return "<span class='label label-{$style}'>$item</span>";
         })->implode('&nbsp;');
     }

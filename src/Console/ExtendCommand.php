@@ -75,21 +75,30 @@ class ExtendCommand extends Command
 
         $this->extensionDir = config('admin.extension_dir');
 
-        InputExtensionDir:
         if (empty($this->extensionDir)) {
-            $this->extensionDir = $this->ask('Please input a directory to store your extension:');
+            $this->error('Configure admin.extension_dir before generating an extension.');
+            return self::FAILURE;
         }
-
-        if (!file_exists($this->extensionDir)) {
-            $this->makeDir();
-        }
-
         $this->package = $this->argument('extension');
-
-        InputExtensionName:
         if (!$this->validateExtensionName($this->package)) {
-            $this->package = $this->ask("[$this->package] is not a valid package name, please input a name like (<vendor>/<name>)");
-            goto InputExtensionName;
+            $this->error('The package name must be lowercase vendor/name.');
+            return self::FAILURE;
+        }
+        $this->namespace = trim($this->option('namespace') ?: implode('\\', array_map(fn ($part) => Str::studly($part), explode('/', $this->package))), '\\');
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*(?:\\\\[a-zA-Z_][a-zA-Z0-9_]*)*$/', $this->namespace)) {
+            $this->error('The namespace must be a valid PHP namespace.');
+            return self::FAILURE;
+        }
+        $this->className = $this->getClassName();
+        try {
+            GeneratedSource::assertCompiles("<?php namespace {$this->namespace}; class {$this->className} {}");
+        } catch (\Throwable $exception) {
+            $this->error($exception->getMessage());
+            return self::FAILURE;
+        }
+        if (file_exists(rtrim($this->extensionDir, '/').'/'.$this->package)) {
+            $this->error('The extension destination already exists.');
+            return self::FAILURE;
         }
 
         $this->makeDirs();
@@ -97,6 +106,7 @@ class ExtendCommand extends Command
 
         $this->info("The extension scaffolding generated successfully. \r\n");
         $this->showTree();
+        return self::SUCCESS;
     }
 
     /**
@@ -134,8 +144,6 @@ TREE;
      */
     protected function makeFiles()
     {
-        $this->namespace = $this->getRootNameSpace();
-
         $this->className = $this->getClassName();
 
         // copy files
@@ -234,7 +242,7 @@ TREE;
      */
     protected function validateExtensionName($name)
     {
-        return preg_match('/^[\w\-_]+\/[\w\-_]+$/', $name);
+        return preg_match('/^[a-z0-9]+(?:[-_][a-z0-9]+)*\/[a-z0-9]+(?:[-_][a-z0-9]+)*$/', $name);
     }
 
     /**

@@ -3,13 +3,17 @@
 namespace Encore\Admin\Controllers;
 
 use Encore\Admin\Actions\Action;
+use Encore\Admin\Actions\BatchAction;
 use Encore\Admin\Actions\GridAction;
 use Encore\Admin\Actions\Response;
 use Encore\Admin\Actions\RowAction;
+use Encore\Admin\Security\HandlerContext;
+use Encore\Admin\Security\InputRedactor;
 use Encore\Admin\Widgets\Form;
 use Exception;
 use Illuminate\Contracts\Support\Renderable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
@@ -24,9 +28,10 @@ class HandleController extends Controller
     public function handleForm(Request $request)
     {
         $form = $this->resolveForm($request);
+        abort_unless(HandlerContext::authorized($form), 403);
 
         if ($errors = $form->validate($request)) {
-            return back()->withInput()->withErrors($errors);
+            return back()->withInput(InputRedactor::redact($request->except(['_context', '_token'])))->withErrors($errors);
         }
 
         return $form->sanitize()->handle($request);
@@ -41,22 +46,11 @@ class HandleController extends Controller
      */
     protected function resolveForm(Request $request)
     {
-        if (!$request->has('_form_')) {
-            throw new Exception('Invalid form request.');
-        }
-
-        $formClass = $request->get('_form_');
-
-        if (!class_exists($formClass)) {
-            throw new Exception("Form [{$formClass}] does not exist.");
-        }
-
-        /** @var Form $form */
+        $formClass = $request->input('_form_');
+        abort_unless(is_string($formClass) && is_subclass_of($formClass, Form::class), 403);
+        HandlerContext::validate($request, 'form', $formClass);
+        abort_unless(method_exists($formClass, 'handle'), 403);
         $form = app($formClass);
-
-        if (!method_exists($form, 'handle')) {
-            throw new Exception("Form method {$formClass}::handle() does not exist.");
-        }
 
         return $form;
     }
@@ -75,11 +69,19 @@ class HandleController extends Controller
 
         if ($action instanceof GridAction) {
             $model = $action->retrieveModel($request);
+            // A retrieval sentinel must never become an authorized subject or handler argument.
+            if ($action instanceof BatchAction) {
+                abort_unless($model instanceof EloquentCollection && $model->isNotEmpty(), 404);
+            } elseif ($action instanceof RowAction) {
+                abort_unless($model instanceof Model, 404);
+            } else {
+                abort_unless($model instanceof Model || ($model instanceof EloquentCollection && $model->isNotEmpty()), 404);
+            }
             $arguments[] = $model;
         }
 
         if (!$action->passesAuthorization($model)) {
-            return $action->failedAuthorization();
+            abort(403, trans('admin.deny'));
         }
 
         if ($action instanceof RowAction) {
@@ -90,8 +92,22 @@ class HandleController extends Controller
             $response = $action->validate($request)->handle(
                 ...$this->resolveActionArgs($request, ...$arguments)
             );
-        } catch (Exception $exception) {
-            return Response::withException($exception)->send();
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            // Only declared interactor fields carry trusted guidance; arbitrary handler
+            // ValidationException messages retain the same generic failure contract.
+            $failure = new Response();
+            $failure->status = false;
+            $response = $failure->toastr()->error(__('admin.failed'))->send();
+            if ($action->hasSafeValidationErrors()) {
+                $response->setData($response->getData(true) + ['errors' => $action->safeValidationErrors()]);
+            }
+
+            return $response;
+        } catch (\Throwable $exception) {
+            $failure = new Response();
+            $failure->status = false;
+
+            return $failure->toastr()->error(__('admin.failed'))->send();
         }
 
         if ($response instanceof Response) {
@@ -108,29 +124,34 @@ class HandleController extends Controller
      */
     protected function resolveActionInstance(Request $request)
     {
-        if (!$request->has('_action')) {
-            throw new Exception('Invalid action request.');
+        $encoded = $request->input('_action');
+        abort_unless(is_string($encoded), 403);
+        $actionClass = str_replace('_', '\\', $encoded);
+        abort_unless(is_subclass_of($actionClass, Action::class) && method_exists($actionClass, 'handle'), 403);
+        $scope = [];
+        if (is_subclass_of($actionClass, GridAction::class)) {
+            $model = $request->input('_model');
+            abort_unless(is_string($model) && is_subclass_of(str_replace('_', '\\', $model), Model::class), 403);
+            $scope['model'] = $model;
+            $keys = $request->input('_key');
+            abort_unless(is_string($keys) || is_int($keys) || (is_array($keys) && $keys !== []), 403);
+            foreach (is_array($keys) ? $keys : explode(',', (string) $keys) as $key) {
+                abort_unless((is_string($key) || is_int($key)) && trim((string) $key) !== '', 403);
+            }
+            if (is_subclass_of($actionClass, RowAction::class)) {
+                abort_unless(!is_array($keys), 403);
+                $scope['key'] = (string) $keys;
+            }
         }
-
-        $actionClass = str_replace('_', '\\', $request->get('_action'));
-
-        if (!class_exists($actionClass)) {
-            throw new Exception("Form [{$actionClass}] does not exist.");
-        }
-
-        /** @var GridAction $form */
+        HandlerContext::validate($request, 'action', $actionClass, $scope);
         $action = app($actionClass);
-
-        if (!method_exists($action, 'handle')) {
-            throw new Exception("Action method {$actionClass}::handle() does not exist.");
-        }
 
         return $action;
     }
 
     /**
      * @param Request               $request
-     * @param Model|Collection|bool $model
+     * @param Model|Collection|null $model
      *
      * @return array
      */
@@ -138,7 +159,7 @@ class HandleController extends Controller
     {
         $args = [$request];
 
-        if (!empty($model)) {
+        if ($model !== null) {
             array_unshift($args, $model);
         }
 
@@ -152,19 +173,20 @@ class HandleController extends Controller
      */
     public function handleSelectable(Request $request)
     {
-        $class = $request->get('selectable');
-        $args = $request->get('args', []);
-
-        $class = str_replace('_', '\\', $class);
-
-        if (class_exists($class)) {
-            /** @var \Encore\Admin\Grid\Selectable $selectable */
-            $selectable = new $class(...array_values($args));
-
-            return $selectable->render();
+        $encoded = $request->input('selectable');
+        $args = $request->input('args', []);
+        abort_unless(is_string($encoded) && is_array($args), 403);
+        $class = str_replace('_', '\\', $encoded);
+        foreach ($args as $arg) {
+            abort_unless(is_scalar($arg) || $arg === null, 403);
         }
+        abort_unless(is_subclass_of($class, \Encore\Admin\Grid\Selectable::class), 403);
+        // Query-string arguments are strings; normalize producer values to match transport.
+        HandlerContext::validate($request, 'selectable', $class, ['args' => array_values($args)]);
+        $selectable = new $class(...array_values($args));
+        abort_unless(HandlerContext::authorized($selectable), 403);
 
-        return $class;
+        return $selectable->render();
     }
 
     /**
@@ -174,18 +196,15 @@ class HandleController extends Controller
      */
     public function handleRenderable(Request $request)
     {
-        $class = $request->get('renderable');
-        $key = $request->get('key');
+        $encoded = $request->input('renderable');
+        $key = $request->input('key');
+        abort_unless(is_string($encoded) && (is_string($key) || is_int($key)), 403);
+        $class = str_replace('_', '\\', $encoded);
+        abort_unless(is_subclass_of($class, Renderable::class), 403);
+        HandlerContext::validate($request, 'renderable', $class, ['key' => (string) $key]);
+        $renderable = new $class();
+        abort_unless(HandlerContext::authorized($renderable, $key), 403);
 
-        $class = str_replace('_', '\\', $class);
-
-        if (class_exists($class)) {
-            /** @var Renderable $selectable */
-            $renderable = new $class();
-
-            return $renderable->render($key);
-        }
-
-        return $class;
+        return $renderable->render($key);
     }
 }

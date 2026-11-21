@@ -13,7 +13,7 @@ trait HasPermissions
      */
     public function allPermissions(): Collection
     {
-        return $this->roles()->with('permissions')->get()->pluck('permissions')->flatten()->merge($this->permissions);
+        return $this->roles()->with('permissions')->get()->pluck('permissions')->flatten()->merge($this->permissions()->get());
     }
 
     /**
@@ -34,11 +34,11 @@ trait HasPermissions
             return true;
         }
 
-        if ($this->permissions->pluck('slug')->contains($ability)) {
+        if ($this->permissions()->where('slug', $ability)->exists()) {
             return true;
         }
 
-        return $this->roles->pluck('permissions')->flatten()->pluck('slug')->contains($ability);
+        return $this->roles()->whereHas('permissions', fn ($query) => $query->where('slug', $ability))->exists();
     }
 
     /**
@@ -72,7 +72,7 @@ trait HasPermissions
      */
     public function isRole(string $role): bool
     {
-        return $this->roles->pluck('slug')->contains($role);
+        return $this->roles()->where('slug', $role)->exists();
     }
 
     /**
@@ -84,7 +84,7 @@ trait HasPermissions
      */
     public function inRoles(array $roles = []): bool
     {
-        return $this->roles->pluck('slug')->intersect($roles)->isNotEmpty();
+        return $this->roles()->whereIn('slug', $roles)->exists();
     }
 
     /**
@@ -112,7 +112,7 @@ trait HasPermissions
      */
     protected static function bootHasPermissions()
     {
-        static::deleting(function ($model) {
+        static::deleted(function ($model) {
             $model->roles()->detach();
 
             $model->permissions()->detach();

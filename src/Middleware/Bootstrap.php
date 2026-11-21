@@ -10,8 +10,10 @@ class Bootstrap
 {
     public function handle(Request $request, Closure $next)
     {
-        Admin::bootstrap();
+        return Admin::withinRequest(function () use ($request, $next) {
+            Admin::bootstrap();
 
-        return $next($request);
+            return $next($request);
+        });
     }
 }

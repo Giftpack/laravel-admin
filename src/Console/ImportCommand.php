@@ -31,8 +31,16 @@ class ImportCommand extends Command
     {
         $extension = $this->argument('extension');
 
-        if (empty($extension) || !Arr::has(Admin::$extensions, $extension)) {
-            $extension = $this->choice('Please choose a extension to import', array_keys(Admin::$extensions));
+        if (empty($extension)) {
+            if (empty(Admin::$extensions) || !$this->input->isInteractive()) {
+                $this->error('Specify a registered extension to import.');
+                return self::FAILURE;
+            }
+            $extension = $this->choice('Please choose an extension to import', array_keys(Admin::$extensions));
+        }
+        if (!Arr::has(Admin::$extensions, $extension)) {
+            $this->error('Unknown extension.');
+            return self::FAILURE;
         }
 
         $className = Arr::get(Admin::$extensions, $extension);
@@ -40,11 +48,17 @@ class ImportCommand extends Command
         if (!class_exists($className) || !method_exists($className, 'import')) {
             $this->error("Invalid Extension [$className]");
 
-            return;
+            return self::FAILURE;
         }
 
-        call_user_func([$className, 'import'], $this);
+        try {
+            call_user_func([$className, 'import'], $this);
+        } catch (\Throwable $exception) {
+            $this->error($exception->getMessage());
+            return self::FAILURE;
+        }
 
         $this->info("Extension [$className] imported");
+        return self::SUCCESS;
     }
 }

@@ -15,7 +15,7 @@ class DummyClass extends AdminController
      *
      * @var string
      */
-    protected $title = 'DummyTitle';
+    protected $title = DummyTitleLiteral;
 
     /**
      * Make a grid builder.

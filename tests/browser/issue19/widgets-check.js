@@ -1,0 +1,7 @@
+async(page)=>{
+const origin=new URL(page.url()).origin;await page.goto(origin+'/control/parity/widgets');await page.getByRole('heading',{name:'Browser workflow 中文'}).waitFor();await page.waitForLoadState('networkidle');
+let response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('_handle_form_'));await page.getByRole('button',{name:'admin.next',exact:true}).click();await response;await page.waitForLoadState('networkidle');await page.locator('.has-error').waitFor();
+await page.locator('[name=name]').fill('Browser workflow retained');response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('_handle_form_'));await page.getByRole('button',{name:'admin.next',exact:true}).click();await response;await page.locator('[name=approved]').waitFor();await page.waitForLoadState('networkidle');
+await page.locator('[name=approved]').fill('Browser approved');response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('_handle_form_'));await page.getByRole('button',{name:'admin.submit',exact:true}).click();await response;await page.getByRole('heading',{name:'Workflow persisted'}).waitFor();
+const state=await(await page.request.get(origin+'/control/parity/state')).json();if(state.record.workflow!=='Browser workflow retained/Browser approved')throw Error('Widget retained state/save');await page.screenshot({path:'OUTPUT_DIR/widget-complete.png',fullPage:true});return{signed_native_widget_form:true,invalid_visible_feedback:true,server_owned_next_step:true,retained_first_step_database_outcome:true};
+}

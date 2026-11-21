@@ -120,3 +120,12 @@ Category::tree(function ($tree) {
 ```
 
 
+
+
+### PHP 8.5 / Laravel 13 ordering and deletion
+
+Reordering accepts a JSON list of branches with `id` and optional `children` lists. IDs are retained; duplicate, missing, out-of-scope, self-parent and cyclic references are rejected before any hierarchy write. Repeated operations recompute preorder positions. Tree models use their selected database connection, including custom keys and parent/title/order columns. Generic resource controllers using the package Form store path and the built-in menu controller process `_order` as a separate operation before create validation; authorization and CSRF middleware still apply.
+
+The existing sibling policy is retained: ordinary model trees sort nonzero orders first and zero last; menu trees sort zero first, then increasing order. Equal-order siblings retain the database's unspecified tie order. Select-option indentation and root labels remain unchanged. Root parent sentinel `0` is reserved.
+
+Deletion retains the existing **direct-child** policy: deleting a node deletes its immediate children in bulk; deeper descendants remain and can reference a deleted ancestor. Soft-delete models soft-delete direct children. Force-deleting an already soft-deleted parent does not purge its previously soft-deleted children. Bulk child deletion does not fire each child's model events. Menu deletion explicitly detaches role pivots for the parent and deleted direct children; retained deeper descendants keep their role pivots. Parent deletion cancellation or a database exception rolls back the operation on the model connection. Applications that require recursive deletion should implement that policy explicitly.

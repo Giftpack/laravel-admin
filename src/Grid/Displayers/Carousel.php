@@ -29,12 +29,13 @@ class Carousel extends AbstractDisplayer
                 $image = Storage::disk(config('admin.upload.disk'))->url($path);
             }
 
+            $image = $this->sanitizeUrl($image, true);
             $caption = '';
 
             return compact('image', 'caption');
         });
 
-        $id = sprintf('carousel-%s-%s', $this->getName(), $this->getKey());
+        $id = 'carousel-'.$this->getControlId();
 
         return (new CarouselWidget($images))->width($width)->height($height)->id($id);
     }

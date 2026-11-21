@@ -411,9 +411,7 @@ $form->rate($column[, $label]);
 
 图片上传目录在文件`config/admin.php`中的`upload.image`中配置，如果目录不存在，需要创建该目录并开放写权限。
 
-可以使用压缩、裁切、添加水印等各种方法,需要先安装[intervention/image](http://image.intervention.io/getting_started/installation).
-
-更多使用方法请参考[[Intervention](http://image.intervention.io/getting_started/introduction)]：
+原圖上傳不需要 Intervention；圖片處理及縮圖使用選配的 `intervention/image:^3.11` 與 PHP GD，JPEG 自動轉正另需 EXIF。請參考[上傳需求與檔案生命週期](/zh/model-form-upload.md#圖片處理與檔案生命週期)。圖片目錄設定為 `admin.upload.directory.image`。
 ```php
 $form->image($column[, $label]);
 
@@ -421,10 +419,10 @@ $form->image($column[, $label]);
 $form->image($column[, $label])->move($dir, $name);
 
 // 剪裁图片
-$form->image($column[, $label])->crop(int $width, int $height, [int $x, int $y]);
+$form->image($column[, $label])->crop(320, 200, 10, 10);
 
 // 加水印
-$form->image($column[, $label])->insert($watermark, 'center');
+$form->image($column[, $label])->place($watermark, 'center');
 
 // 添加图片删除按钮
 $form->image($column[, $label])->removable();

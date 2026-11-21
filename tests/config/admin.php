@@ -2,6 +2,9 @@
 
 return [
 
+    // Retain the suite's original inline action UI when package defaults are merged.
+    'grid_action_class' => \Encore\Admin\Grid\Displayers\Actions::class,
+
     /*
      * Laravel-admin name.
      */

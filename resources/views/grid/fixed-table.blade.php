@@ -26,6 +26,9 @@
 
     <!-- /.box-header -->
     <div class="box-body table-responsive no-padding">
+        @if ($grid->hasQuickCreate())
+            <table class="table grid-quick-create-table">{!! $grid->renderQuickCreate() !!}</table>
+        @endif
         <div class="tables-container">
             <div class="table-wrap table-main">
                 <table class="table grid-table" id="{{ $grid->tableID }}">

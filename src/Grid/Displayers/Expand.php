@@ -21,13 +21,16 @@ class Expand extends AbstractDisplayer
             $async = true;
             $loadGrid = is_subclass_of($callback, Simple::class);
         } else {
-            $html = call_user_func_array($callback->bindTo($this->row), [$this->row]);
+            if (!$callback instanceof \Closure) {
+                throw new \InvalidArgumentException('Expand requires a model-bound closure or a renderable class.');
+            }
+            $html = $this->callModelCallback($callback, [$this->row]);
         }
 
         return Admin::component('admin::components.column-expand', [
             'key'           => $this->getKey(),
             'url'           => $this->getLoadUrl(),
-            'name'          => str_replace('.', '-', $this->getName()).'-'.$this->getKey(),
+            'name'          => $this->getControlId(),
             'html'          => $html,
             'value'         => $this->value,
             'async'         => $async,
@@ -46,6 +49,11 @@ class Expand extends AbstractDisplayer
     {
         $renderable = str_replace('\\', '_', $this->renderable);
 
-        return route('admin.handle-renderable', compact('renderable'));
+        if (!$this->renderable) {
+            return '';
+        }
+        $_context = \Encore\Admin\Security\HandlerContext::issue('renderable', $this->renderable, ['key' => (string) $this->getKey()]);
+
+        return route(admin_get_route('handle-renderable'), compact('renderable', '_context'));
     }
 }

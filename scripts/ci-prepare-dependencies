@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+lane=${1:-current};case "$lane" in current)suffix=;;lowest)suffix=-lowest;;*)exit 2;;esac
+# All immutable inputs must exist in the checkout; .scratch contains outputs only.
+for host in "$lane" "optional$suffix" "excel$suffix"; do
+ for name in composer.json composer.lock; do
+  [ -f "tests/Fixtures/dependencies/host-$host/$name" ] || { echo "Missing versioned host-$host $name" >&2; exit 2; }
+ done
+done
+docker build -t laravel-admin-php85-tests:local .
+mkdir -p .scratch/php85-laravel13-upgrade/artifacts
+for host in "$lane" "optional$suffix" "excel$suffix";do
+ fixture="$(pwd)/.scratch/php85-laravel13-upgrade/dependencies/host-$host"
+ mkdir -p "$fixture"
+ docker run --rm -v "$(pwd):/application:ro" -v "$fixture:/host" -w /host laravel-admin-php85-tests:local php /application/scripts/prepare-dependency-host.php "$host" /host
+ mkdir -p "$fixture/bootstrap/cache" "$fixture/storage/framework/views"
+ docker run --rm -v "$(pwd):/application:ro" -v "$fixture:/host" -w /host laravel-admin-php85-tests:local composer install --no-interaction --no-progress
+ docker run --rm -v "$fixture:/host:ro" -w /host laravel-admin-php85-tests:local composer check-platform-reqs --format=json
+ docker run --rm -v "$fixture:/host:ro" -w /host laravel-admin-php85-tests:local composer audit --locked --format=json
+done

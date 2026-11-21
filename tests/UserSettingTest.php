@@ -79,7 +79,8 @@ class UserSettingTest extends TestCase
 
         $this->assertTrue(app('hash')->check($data['password'], Administrator::first()->makeVisible('password')->password));
 
-        $this->visit('admin/auth/logout')
+        $this->call('POST', 'admin/auth/logout');
+        $this->visit('admin')
             ->seePageIs('admin/auth/login')
             ->dontSeeIsAuthenticated('admin');
 

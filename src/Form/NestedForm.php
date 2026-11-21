@@ -56,6 +56,8 @@ class NestedForm
 {
     const DEFAULT_KEY_NAME = '__LA_KEY__';
 
+    protected $originalKeyName;
+
     const REMOVE_FLAG_NAME = '_remove_';
 
     const REMOVE_FLAG_CLASS = 'fom-removed';
@@ -155,6 +157,7 @@ class NestedForm
     public function setKey($key)
     {
         $this->key = $key;
+        $this->fields->each(fn (Field $field) => $this->formatField($field));
 
         return $this;
     }
@@ -166,7 +169,7 @@ class NestedForm
      *
      * @return $this
      */
-    public function setForm(Form $form = null)
+    public function setForm(?Form $form = null)
     {
         $this->form = $form;
 
@@ -180,7 +183,7 @@ class NestedForm
      *
      * @return $this
      */
-    public function setWidgetForm(WidgetForm $form = null)
+    public function setWidgetForm(?WidgetForm $form = null)
     {
         $this->form = $form;
 
@@ -207,6 +210,7 @@ class NestedForm
      */
     public function setOriginal($data, $relatedKeyName = null)
     {
+        $this->originalKeyName = $relatedKeyName;
         if (empty($data)) {
             return $this;
         }
@@ -235,7 +239,8 @@ class NestedForm
     public function prepare($input)
     {
         foreach ($input as $key => $record) {
-            $this->setFieldOriginalValue($key);
+            $identity = $this->originalKeyName ? Arr::get($record, $this->originalKeyName) : null;
+            $this->setFieldOriginalValue($identity !== null && $identity !== '' ? $identity : $key);
             $input[$key] = $this->prepareRecord($record);
         }
 
@@ -270,7 +275,7 @@ class NestedForm
      */
     protected function prepareRecord($record)
     {
-        if ($record[static::REMOVE_FLAG_NAME] == 1) {
+        if (($record[static::REMOVE_FLAG_NAME] ?? 0) == 1) {
             return $record;
         }
 
@@ -278,11 +283,14 @@ class NestedForm
 
         /* @var Field $field */
         foreach ($this->fields as $field) {
+            if ($field->isReadOnly()) {
+                continue;
+            }
             $columns = $field->column();
 
             $value = $this->fetchColumnValue($record, $columns);
 
-            if (is_null($value)) {
+            if (!Arr::has($record, $columns)) {
                 continue;
             }
 
@@ -290,7 +298,7 @@ class NestedForm
                 $value = $field->prepare($value);
             }
 
-            if (($field instanceof \Encore\Admin\Form\Field\Hidden) || $value != $field->original()) {
+            if (Arr::has($record, $columns)) {
                 if (is_array($columns)) {
                     foreach ($columns as $name => $column) {
                         Arr::set($prepared, $column, $value[$name]);
@@ -301,7 +309,7 @@ class NestedForm
             }
         }
 
-        $prepared[static::REMOVE_FLAG_NAME] = $record[static::REMOVE_FLAG_NAME];
+        $prepared[static::REMOVE_FLAG_NAME] = $record[static::REMOVE_FLAG_NAME] ?? 0;
 
         return $prepared;
     }

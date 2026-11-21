@@ -1,54 +1,24 @@
-# 安装
+# 安裝 — 2.0 候選版
 
-> 当前版本(1.5)需要安装`PHP 7+`和`Laravel 5.5`, 如果你使用更早的版本，请参考文档: [1.4](http://laravel-admin.org/docs/v1.4/#/zh/) 
+此主要版本候選尚未發布，也沒有建立標籤。以下 `^2.0` 指令僅適用於未來核准發布後；本機審查使用指向此 checkout 的 Composer path repository 並明確指定測試版本 `2.0.0`。
 
-首先确保安装好了`laravel`，并且数据库连接设置正确。
+需求：PHP `~8.5.13`（實測8.5.13）、Laravel `^13.40`（最低13.40.0／目前鎖定13.43.0）、composer.json 所列最低修補版本的 Symfony7.4 元件、PostgreSQL15.14 或 MySQL8.4.13。未宣稱其他引擎／Laravel／Symfony 支援。需要所選資料庫的 PDO、Fileinfo、mbstring、DOM/XML；圖片轉換需要 GD/EXIF 與選用套件，XLSX 需要 ZIP 與選用套件。
 
-```
-composer require encore/laravel-admin "1.5.*"
-```
+**全新** Laravel13 主機先設定資料庫，再執行：
 
-然后运行下面的命令来发布资源：
-
-```
-php artisan vendor:publish --provider="Encore\Admin\AdminServiceProvider"
-```
-
-在该命令会生成配置文件`config/admin.php`，可以在里面修改安装的地址、数据库连接、以及表名，建议都是用默认配置不修改。
-
-然后运行下面的命令完成安装：
-```
+```sh
+composer require encore/laravel-admin:^2.0 --with-all-dependencies
+php artisan vendor:publish --tag=laravel-admin-config
+php artisan vendor:publish --tag=laravel-admin-migrations
+php artisan vendor:publish --tag=laravel-admin-assets
+php artisan vendor:publish --tag=laravel-admin-lang
 php artisan admin:install
 ```
 
-启动服务后，在浏览器打开 `http://localhost/admin/` ,使用用户名 `admin` 和密码 `admin`登陆.
+安裝前檢查 config/admin.php 的模型、連線／表名、路由前綴／網域、guard、上傳磁碟。安裝會執行已發布的 migration；全新預設帳號為 `admin`／`admin`，對外開放前務必修改。產生程式位於 app/Admin，靜態資源位於 public/vendor/laravel-admin。若要自行維護視圖覆寫，可另發布 `laravel-admin-views`。
 
-## 生成的文件
+既有主機請閱讀[升級與回復](upgrade.md)，不可重建後台目錄或重新填入既有資料。一般發布保留既有檔案，強制發布會覆蓋自訂設定／視圖／資源。
 
-安装完成之后,会在项目目录中生成以下的文件:
+選用實測套件：Intervention Image3.11.0／3.11.10、Maatwebsite Excel4.0.7／PhpSpreadsheet5.11.0、Mews Captcha3.5.1、Spatie Eloquent Sortable5.0.1、Matthias Mullie Minify1.3.76。未安裝 Intervention 仍可一般上傳；轉換／縮圖會明確回報缺少套件。README 第三方擴充、實際雲端儲存及歷史 MongoDB 整合仍是未解決前置條件，沒有認證或默認移除。
 
-### 配置文件
-
-安装完成之后，`laravel-admin`所有的配置都在`config/admin.php`文件中。
-
-### 后台项目文件
-安装完成之后，后台的安装目录为`app/Admin`，之后大部分的后台开发编码工作都是在这个目录下进行。
-
-```
-app/Admin
-├── Controllers
-│   ├── ExampleController.php
-│   └── HomeController.php
-├── bootstrap.php
-└── routes.php
-```
-
-`app/Admin/routes.php`文件用来配置后台路由。
-
-`app/Admin/bootstrap.php` 是`laravel-admin`的启动文件, 使用方法请参考文件里面的注释.
-
-`app/Admin/Controllers`目录用来存放后台控制器文件，该目录下的`HomeController.php`文件是后台首页的显示控制器，`ExampleController.php`为实例文件。
-
-### 静态文件
-
-后台所需的前端静态文件在`/public/vendor/laravel-admin`目录下.
+開發測試使用 BrowserKit7.3.0、PHPUnit12.5.8／12.5.45、Mockery1.6.15。舊間接依賴 Mockery1.0 在 PHP8.5 的 spy 產生器會失敗，明確的開發最低版本已排除它。使用者執行期不需安裝這些開發工具。詳見[測試說明](../../tests/README.md)。

@@ -1,5 +1,5 @@
 <thead>
-<tr class="quick-create">
+<tr class="quick-create" data-grid="{{ $gridID }}">
     <td colspan="{{ $columnCount }}" style="height: 47px;padding-left: 57px;background-color: #f9f9f9; vertical-align: middle;">
 
         <span class="create" style="color: #bdbdbd;cursor: pointer;display: block;">

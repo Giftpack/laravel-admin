@@ -236,7 +236,7 @@ abstract class AbstractFilter
 
         $value = Arr::get($inputs, $this->column);
 
-        if (!isset($value)) {
+        if (!isset($value) || !is_scalar($value) || $value === '') {
             return;
         }
 
@@ -394,7 +394,7 @@ abstract class AbstractFilter
      */
     public function default($default = null)
     {
-        if ($default) {
+        if ($default !== null) {
             $this->defaultValue = $default;
         }
 
@@ -497,7 +497,7 @@ abstract class AbstractFilter
             'column'    => $this->column,
             'name'      => $this->formatName($this->column),
             'label'     => $this->label,
-            'value'     => $this->value ?: $this->defaultValue,
+            'value'     => $this->value ?? $this->defaultValue,
             'presenter' => $this->presenter(),
         ], $this->presenter()->variables());
     }

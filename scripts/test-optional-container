@@ -1,0 +1,23 @@
+#!/bin/sh
+# Isolated optional integration host; same guarded disposable services as core acceptance.
+set -eu
+cd "$(dirname "$0")/.."
+engine=${1:-pgsql}
+lane=${2:-optional}
+case "$lane" in optional|optional-lowest) ;; *) exit 2 ;; esac
+case "$engine" in pgsql) host=postgres; port=5432 ;; mysql) host=mysql; port=3306 ;; *) exit 2 ;; esac
+project="laravel-admin-optional-$(date +%s)-$$"
+export TEST_DB_CONNECTION="$engine" TEST_DB_HOST="$host" TEST_DB_PORT="$port"
+export TEST_RESULTS_DIR="$(pwd)/.scratch/php85-laravel13-upgrade/artifacts"
+fixture="$(pwd)/.scratch/php85-laravel13-upgrade/dependencies/host-$lane"
+[ -f "$fixture/vendor/autoload.php" ] || { echo 'Install the locked optional integration host first.' >&2; exit 2; }
+cleanup() { docker compose -f docker-compose.yml -f scripts/dependency-compose.yml --env-file /dev/null -p "$project" down --volumes --remove-orphans >/dev/null; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+docker compose -f docker-compose.yml -f scripts/dependency-compose.yml --env-file /dev/null -p "$project" up -d --wait "$host"
+if [ -n "${3:-}" ]; then
+  set -- "$3"
+else
+  set -- /host/vendor/bin/phpunit -c /application/phpunit.xml.dist --bootstrap /host/vendor/autoload.php --filter 'ExtensionToolsTest|OptionalIntegrationTest'
+fi
+docker compose -f docker-compose.yml -f scripts/dependency-compose.yml --env-file /dev/null -p "$project" run --rm --no-deps -v "$fixture:/host:ro" application php "$@"

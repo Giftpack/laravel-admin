@@ -5,6 +5,7 @@ namespace Encore\Admin\Controllers;
 use Encore\Admin\Auth\Database\OperationLog;
 use Encore\Admin\Grid;
 use Illuminate\Support\Arr;
+use Encore\Admin\Security\InputRedactor;
 
 class LogController extends AdminController
 {
@@ -26,22 +27,24 @@ class LogController extends AdminController
         $grid->model()->orderBy('id', 'DESC');
 
         $grid->column('id', 'ID')->sortable();
-        $grid->column('user.name', 'User');
+        $grid->column('user.name', 'User')->display(fn ($name) => e($name));
         $grid->column('method')->display(function ($method) {
             $color = Arr::get(OperationLog::$methodColors, $method, 'grey');
 
+            $method = e($method);
+
             return "<span class=\"badge bg-$color\">$method</span>";
         });
-        $grid->column('path')->label('info');
-        $grid->column('ip')->label('primary');
+        $grid->column('path')->display(fn ($path) => e($path))->label('info');
+        $grid->column('ip')->display(fn ($ip) => e($ip))->label('primary');
         $grid->column('input')->display(function ($input) {
-            $input = json_decode($input, true);
+            $input = json_decode(InputRedactor::json($input), true);
             $input = Arr::except($input, ['_pjax', '_token', '_method', '_previous_']);
             if (empty($input)) {
                 return '<code>{}</code>';
             }
 
-            return '<pre>'.json_encode($input, JSON_PRETTY_PRINT | JSON_HEX_TAG).'</pre>';
+            return '<pre>'.json_encode($input, JSON_PRETTY_PRINT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT).'</pre>';
         });
 
         $grid->column('created_at', trans('admin.created_at'));
@@ -60,6 +63,7 @@ class LogController extends AdminController
             $filter->equal('method')->select(array_combine(OperationLog::$methods, OperationLog::$methods));
             $filter->like('path');
             $filter->equal('ip');
+            $filter->between('created_at')->datetime();
         });
 
         return $grid;
@@ -72,9 +76,14 @@ class LogController extends AdminController
      */
     public function destroy($id)
     {
-        $ids = explode(',', $id);
+        $ids = explode(',', (string) $id);
+        foreach ($ids as $key) {
+            if (!ctype_digit($key) || (int) $key < 1) {
+                return response()->json(['status' => false, 'message' => trans('admin.delete_failed')], 422);
+            }
+        }
 
-        if (OperationLog::destroy(array_filter($ids))) {
+        if (OperationLog::destroy(array_unique($ids))) {
             $data = [
                 'status'  => true,
                 'message' => trans('admin.delete_succeeded'),

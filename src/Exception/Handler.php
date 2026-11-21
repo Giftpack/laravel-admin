@@ -10,19 +10,19 @@ class Handler
     /**
      * Render exception.
      *
-     * @param \Exception $exception
+     * @param \Throwable $exception
      *
      * @return string
      */
-    public static function renderException(\Exception $exception)
+    public static function renderException(\Throwable $exception)
     {
-        $error = new MessageBag([
+        $error = new MessageBag(config('app.debug') ? [
             'type'    => get_class($exception),
             'message' => $exception->getMessage(),
             'file'    => $exception->getFile(),
             'line'    => $exception->getLine(),
             'trace'   => $exception->getTraceAsString(),
-        ]);
+        ] : ['message' => __('admin.failed')]);
 
         $errors = new ViewErrorBag();
         $errors->put('exception', $error);

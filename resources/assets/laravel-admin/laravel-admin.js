@@ -1,3 +1,15 @@
+// Bootstrap 3.4 sanitizes HTML popovers. Retain the package's inline controls
+// without permitting event attributes, form destinations or executable URLs.
+$.extend($.fn.popover.Constructor.DEFAULTS.whiteList, {
+    input: ['type', 'name', 'value', 'placeholder', 'checked', 'disabled', 'readonly', 'multiple', 'accept', 'min', 'max', 'step', 'data-label'],
+    textarea: ['name', 'rows', 'cols', 'placeholder', 'disabled', 'readonly'],
+    button: ['type', 'disabled'],
+    label: ['for'],
+    select: ['name', 'multiple', 'disabled'],
+    option: ['name', 'value', 'selected', 'disabled', 'data-label'],
+    optgroup: ['label', 'disabled']
+});
+
 $.fn.editable.defaults.params = function (params) {
     params._token = LA.token;
     params._editable = 1;

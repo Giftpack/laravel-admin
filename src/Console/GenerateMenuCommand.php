@@ -2,7 +2,6 @@
 
 namespace Encore\Admin\Console;
 
-use Encore\Admin\Auth\Database\Menu;
 use Illuminate\Console\Command;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router;
@@ -48,19 +47,19 @@ class GenerateMenuCommand extends Command
      */
     public function handle()
     {
-        $prefix = config('admin.route.prefix');
+        $prefix = trim((string) config('admin.route.prefix'), '/');
         $routes = collect($this->router->getRoutes())->filter(function (Route $route) use ($prefix) {
             $uri = $route->uri();
             // built-in, parameterized and no-GET are ignored
-            return Str::startsWith($uri, "{$prefix}/")
-                && !Str::startsWith($uri, "{$prefix}/auth/")
+            return ($prefix === '' || Str::startsWith($uri, "{$prefix}/"))
+                && !Str::startsWith($uri, $prefix === '' ? 'auth/' : "{$prefix}/auth/")
                 && !Str::endsWith($uri, '/create')
                 && !Str::contains($uri, '{')
                 && in_array('GET', $route->methods())
-                && !in_array(substr($route->uri(), strlen("{$prefix}/")), config('admin.menu_exclude'));
+                && !in_array(substr($route->uri(), $prefix === '' ? 0 : strlen("{$prefix}/")), config('admin.menu_exclude', []));
         })
             ->map(function (Route $route) use ($prefix) {
-                $uri = substr($route->uri(), strlen("{$prefix}/"));
+                $uri = substr($route->uri(), $prefix === '' ? 0 : strlen("{$prefix}/"));
 
                 return [
                     'title' => Str::ucfirst(
@@ -71,7 +70,9 @@ class GenerateMenuCommand extends Command
             })
             ->pluck('title', 'uri');
 
-        $menus = Menu::all()->pluck('title', 'uri');
+        $menuClass = config('admin.database.menu_model');
+        $model = new $menuClass();
+        $menus = $model->newQuery()->pluck('title', 'uri');
         // exclude exist ones
         $news = $routes->diffKeys($menus)->map(function ($item, $key) {
             return [
@@ -83,7 +84,7 @@ class GenerateMenuCommand extends Command
         })->values()->toArray();
 
         if (!$news) {
-            $this->error('No newly registered routes found.');
+            $this->info('No newly registered routes found.');
         } else {
             if ($this->hasOption('dry-run') && $this->option('dry-run')) {
                 $this->line('<info>The following menu items will be created</info>: ');
@@ -94,9 +95,17 @@ class GenerateMenuCommand extends Command
                     ];
                 }, $news));
             } else {
-                Menu::insert($news);
+                try {
+                    $model->getConnection()->transaction(function () use ($model, $news) {
+                        $model->newQuery()->insert($news);
+                    });
+                } catch (\Throwable $exception) {
+                    $this->error('Unable to generate menu items.');
+                    return self::FAILURE;
+                }
                 $this->line('<info>Done!</info>');
             }
         }
+        return self::SUCCESS;
     }
 }

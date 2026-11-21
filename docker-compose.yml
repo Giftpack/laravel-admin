@@ -1,21 +1,46 @@
+# Run with scripts/test-container; each invocation gets an independent project/network.
 services:
   postgres:
-    image: postgres:15
-    container_name: laravel-admin-postgres
+    image: postgres:15@sha256:bc51cf4f1fe02cce7ed2370b20128a9b00b4eb804573a77d2a0d877aaa9c82b1
     environment:
-      - POSTGRES_DB=laravel_admin_test
-      - POSTGRES_USER=laravel_admin_test
-      - POSTGRES_PASSWORD=secret
-
+      POSTGRES_DB: laravel_admin_test
+      POSTGRES_USER: laravel_admin_test
+      POSTGRES_PASSWORD: disposable-tests-only
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U laravel_admin_test -d laravel_admin_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  mysql:
+    image: mysql:8.4@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
+    environment:
+      MYSQL_DATABASE: laravel_admin_test
+      MYSQL_USER: laravel_admin_test
+      MYSQL_PASSWORD: disposable-tests-only
+      MYSQL_ROOT_PASSWORD: disposable-root-only
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: [CMD-SHELL, 'mysql -h 127.0.0.1 -ularavel_admin_test -p"$$MYSQL_PASSWORD" -D laravel_admin_test -e "SELECT 1"']
+      interval: 2s
+      timeout: 3s
+      retries: 45
   application:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: laravel-admin
-    working_dir: /application
+    image: laravel-admin-php85-tests:local
+    build: .
+    environment:
+      APP_ENV: testing
+      LARAVEL_ADMIN_DISPOSABLE_TESTS: '1'
+      DB_CONNECTION: ${TEST_DB_CONNECTION:-pgsql}
+      DB_HOST: ${TEST_DB_HOST:-postgres}
+      DB_PORT: ${TEST_DB_PORT:-5432}
+      DB_DATABASE: laravel_admin_test
+      DB_USERNAME: laravel_admin_test
+      DB_PASSWORD: disposable-tests-only
     volumes:
-      - ./:/application
-    depends_on:
-      - postgres
-    links:
-      - postgres
+      - ./:/application:ro
+      - ${TEST_RESULTS_DIR:-./.scratch/php85-laravel13-upgrade/artifacts}:/results
+    tmpfs:
+      - /tmp

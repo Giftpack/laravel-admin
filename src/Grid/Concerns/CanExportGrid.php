@@ -15,6 +15,8 @@ trait CanExportGrid
      */
     protected $exporter;
 
+    protected $resolvedExporter;
+
     /**
      * Handle export request.
      *
@@ -45,7 +47,9 @@ trait CanExportGrid
      */
     protected function getExporter($scope)
     {
-        return (new Exporter($this))->resolve($this->exporter)->withScope($scope);
+        abort_unless($this->showExportBtn(), 403);
+
+        return $this->resolvedExporter ??= (new Exporter($this))->resolve($this->exporter)->withScope($scope);
     }
 
     /**

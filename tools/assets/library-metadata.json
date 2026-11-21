@@ -1,0 +1,333 @@
+[
+  {
+    "prefix": "AdminLTE/bootstrap/css/bootstrap.rtl",
+    "name": "Bootstrap RTL",
+    "baseline": "3.3.7.3 / Bootstrap3.3.7",
+    "version": "3.3.7.3 / Bootstrap3.3.7 retained CSS variant",
+    "license": "MIT",
+    "source": "https://github.com/parsmizban/Bootstrap-RTL",
+    "advisory": "CSS-only RTL presentation variant; base JavaScript is patched3.4.1 in both directions."
+  },
+  {
+    "prefix": "AdminLTE/bootstrap/",
+    "name": "Bootstrap",
+    "baseline": "JS3.3.4; CSS3.3.5",
+    "version": "3.4.1 + Debian CVE2024-6485 and CVE2025-1647 backports",
+    "license": "MIT",
+    "source": "https://github.com/twbs/bootstrap/releases/tag/v3.4.1",
+    "package": "bootstrap",
+    "advisory": "Upgraded all core JS/CSS/fonts. Registry still flags upstream3.4.1; two exact Debian source patches and real exploit-condition browser checks provide local remediation. No Bootstrap3 upstream support claim."
+  },
+  {
+    "prefix": "AdminLTE/plugins/jQuery/",
+    "name": "jQuery",
+    "baseline": "2.1.4",
+    "version": "3.8.0",
+    "license": "MIT",
+    "source": "https://github.com/jquery/jquery/releases/tag/3.8.0",
+    "package": "jquery",
+    "advisory": "Replaced affected2.1.4; stable3.8.0 primary release and npm integrity pinned. Legacy filename aliases identical current bytes."
+  },
+  {
+    "prefix": "AdminLTE/plugins/slimScroll/",
+    "name": "jQuery slimScroll",
+    "baseline": "1.3.8",
+    "version": "1.3.8",
+    "license": "MIT (chosen dual MIT/GPL)",
+    "source": "https://github.com/rochal/jQuery-slimScroll",
+    "package": "jquery-slimscroll"
+  },
+  {
+    "prefix": "AdminLTE/plugins/input-mask/",
+    "name": "Inputmask",
+    "baseline": "3.2.8-36",
+    "version": "3.2.8-36 vendored build",
+    "license": "MIT",
+    "source": "https://github.com/RobinHerbots/Inputmask",
+    "package": "inputmask"
+  },
+  {
+    "prefix": "AdminLTE/plugins/ionslider/",
+    "name": "Ion.RangeSlider",
+    "baseline": "1.8.2",
+    "version": "1.8.2",
+    "license": "MIT",
+    "source": "https://github.com/IonDen/ion.rangeSlider",
+    "package": "ion-rangeslider"
+  },
+  {
+    "prefix": "AdminLTE/plugins/bootstrap-slider/",
+    "name": "Bootstrap Slider",
+    "baseline": "JS1.0.1 / legacy CSS",
+    "version": "1.0.1 / legacy CSS snapshot261a97aa",
+    "license": "Apache-2.0",
+    "source": "https://github.com/seiyria/bootstrap-slider",
+    "package": "bootstrap-slider"
+  },
+  {
+    "prefix": "AdminLTE/plugins/iCheck/",
+    "name": "iCheck (all bundled skins/sprites)",
+    "baseline": "1.0.1",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": "https://github.com/fronteed/icheck",
+    "package": "icheck"
+  },
+  {
+    "prefix": "AdminLTE/plugins/colorpicker/",
+    "name": "Bootstrap Colorpicker",
+    "baseline": "2.0.0-beta",
+    "version": "2.0.0-beta",
+    "license": "Apache-2.0",
+    "source": "https://github.com/mjolnic/bootstrap-colorpicker",
+    "package": "bootstrap-colorpicker",
+    "advisory": "Retained legacy HSB rounding is observable in browser (#224466 can normalize to#214466); actual control value must persist. No sanitizer role."
+  },
+  {
+    "prefix": "AdminLTE/plugins/select2/",
+    "name": "Select2 (all bundled translations; embedded mousewheel adapter)",
+    "baseline": "4.0.3; mousewheel3.1.12",
+    "version": "4.0.13; embedded mousewheel adapter as distributed",
+    "license": "MIT",
+    "source": "https://github.com/select2/select2/releases/tag/4.0.13",
+    "package": "select2",
+    "advisory": "Affected4.0.3 replaced with compatible4.0.13, resolving GHSA-rf66-hmqf-q3fc."
+  },
+  {
+    "prefix": "AdminLTE/dist/css/AdminLTE.rtl",
+    "name": "AdminLTE RTL derivative",
+    "baseline": "unversioned261a97aa snapshot",
+    "version": "261a97aa snapshot + local-font import correction",
+    "license": "MIT",
+    "source": "https://github.com/ColorlibHQ/AdminLTE/tree/v2.3.2",
+    "advisory": "Unversioned derivative; exact original/candidate SHA ledger defines supported bytes. Removed remote Google font and missing relative font-face imports; bundled Source Sans CSS supplies same family."
+  },
+  {
+    "prefix": "AdminLTE/dist/",
+    "name": "AdminLTE (skins and distributed images)",
+    "baseline": "2.3.2",
+    "version": "2.3.2",
+    "license": "MIT",
+    "source": "https://github.com/ColorlibHQ/AdminLTE/tree/v2.3.2",
+    "package": "admin-lte",
+    "advisory": "Retained2.3.2 API/layout and all skins. No new major-line or upstream maintenance claim."
+  },
+  {
+    "prefix": "bootstrap-duallistbox/",
+    "name": "Bootstrap Duallistbox",
+    "baseline": "3.0.6",
+    "version": "3.0.6",
+    "license": "Apache-2.0",
+    "source": "https://github.com/istvan-ujjmeszaros/bootstrap-duallistbox",
+    "package": "bootstrap-duallistbox"
+  },
+  {
+    "prefix": "bootstrap-fileinput/js/plugins/canvas-to-blob",
+    "name": "JavaScript Canvas to Blob",
+    "baseline": "2.0.5",
+    "version": "2.0.5",
+    "license": "MIT",
+    "source": "https://github.com/blueimp/JavaScript-Canvas-to-Blob",
+    "package": "blueimp-canvas-to-blob"
+  },
+  {
+    "prefix": "bootstrap-fileinput/js/plugins/piexif",
+    "name": "piexifjs",
+    "baseline": "1.03",
+    "version": "1.03",
+    "license": "MIT",
+    "source": "https://github.com/hMatoba/piexifjs",
+    "package": "piexifjs"
+  },
+  {
+    "prefix": "bootstrap-fileinput/js/plugins/purify",
+    "name": "DOMPurify",
+    "baseline": "1.0.7",
+    "version": "3.4.18",
+    "license": "Apache-2.0 OR MPL-2.0 (choose Apache-2.0)",
+    "source": "https://github.com/cure53/DOMPurify/releases/tag/3.4.18",
+    "package": "dompurify",
+    "advisory": "Replaced affected1.0.7 with current stable3.4.18. Both readable/minified variants identical upstream release family; browser sanitizer payload check passes."
+  },
+  {
+    "prefix": "bootstrap-fileinput/js/plugins/sortable",
+    "name": "KvSortable fork of SortableJS",
+    "baseline": "1.7.0 with KvSortable rename/integration",
+    "version": "1.7.0 vendored KvSortable snapshot261a97aa",
+    "license": "MIT",
+    "source": "https://github.com/kartik-v/bootstrap-fileinput/tree/v4.5.2",
+    "package": "sortablejs"
+  },
+  {
+    "prefix": "bootstrap-fileinput/",
+    "name": "Bootstrap Fileinput",
+    "baseline": "4.5.2",
+    "version": "4.5.2",
+    "license": "BSD-3-Clause",
+    "source": "https://github.com/kartik-v/bootstrap-fileinput/tree/v4.5.2",
+    "package": "bootstrap-fileinput",
+    "advisory": "Retained upload UI; separate embedded sanitizer upgraded. Required local previews/files are exercised; optional live URLs/providers are not certified."
+  },
+  {
+    "prefix": "bootstrap-switch/",
+    "name": "Bootstrap Switch",
+    "baseline": "3.3.2",
+    "version": "3.3.2",
+    "license": "Apache-2.0",
+    "source": "https://github.com/Bttstrp/bootstrap-switch/tree/v3.3.2",
+    "package": "bootstrap-switch"
+  },
+  {
+    "prefix": "bootstrap3-editable/",
+    "name": "X-editable Bootstrap3",
+    "baseline": "1.5.1",
+    "version": "1.5.1",
+    "license": "MIT",
+    "source": "https://github.com/vitalets/x-editable/tree/1.5.1",
+    "package": "x-editable",
+    "advisory": "Retained legacy editor; actual invalid/corrected text and textarea persistence/escaping browser tests. Developer HTML templates remain trusted."
+  },
+  {
+    "prefix": "eonasdan-bootstrap-datetimepicker/",
+    "name": "Bootstrap DateTimePicker",
+    "baseline": "4.17.37",
+    "version": "4.17.49",
+    "license": "MIT",
+    "source": "https://github.com/Eonasdan/bootstrap-datetimepicker/tree/4.17.49",
+    "package": "eonasdan-bootstrap-datetimepicker",
+    "advisory": "Compatible patch release removes legacy jQuery.size usage exposed by real browser on jQuery3; Bootstrap3/Moment API retained."
+  },
+  {
+    "prefix": "flatpickr/dist/shortcut-buttons-flatpickr/",
+    "name": "Shortcut Buttons Flatpickr plugin",
+    "baseline": "unversioned261a97aa snapshot",
+    "version": "261a97aa content-addressed snapshot",
+    "license": "MIT",
+    "source": "https://github.com/jcsmorais/shortcut-buttons-flatpickr",
+    "advisory": "No upstream version banner/manifest; exact per-file SHA defines vendored version, not an invented semver. Actual multiple-date calendar/clear interaction required."
+  },
+  {
+    "prefix": "flatpickr/",
+    "name": "Flatpickr and bundled zh locale",
+    "baseline": "4.6.13",
+    "version": "4.6.13",
+    "license": "MIT",
+    "source": "https://github.com/flatpickr/flatpickr/tree/v4.6.13",
+    "package": "flatpickr"
+  },
+  {
+    "prefix": "font-awesome/",
+    "name": "Font Awesome CSS/fonts",
+    "baseline": "4.7.0",
+    "version": "4.7.0",
+    "license": "CSS MIT; fonts SIL-OFL-1.1",
+    "source": "https://github.com/FortAwesome/Font-Awesome/tree/v4.7.0",
+    "package": "font-awesome"
+  },
+  {
+    "prefix": "fontawesome-iconpicker/",
+    "name": "Font Awesome Iconpicker with embedded jQuery UI Position",
+    "baseline": "unversioned261a97aa snapshot",
+    "version": "261a97aa snapshot + jQuery UI1.12.1 offset guard +1.13.0 CVE2021-41184 selector backport",
+    "license": "MIT",
+    "source": "https://github.com/itsjavi/fontawesome-iconpicker",
+    "advisory": "Preserved exact Font Awesome4 palette and templates; official2/3 packages were evaluated but rejected because their palette differs. Minimal positioning backport is pinned in build.mjs with exact context and real focus/selection check. Embedded position also backports GHSA-gpqq-952q-5327: string of values are selectors, never HTML. Targeted real browser payload regression required."
+  },
+  {
+    "prefix": "google-fonts/",
+    "name": "Source Sans Pro fonts/local CSS",
+    "baseline": "unversioned bundled binary snapshot261a97aa",
+    "version": "261a97aa content-addressed font variants",
+    "license": "SIL-OFL-1.1",
+    "source": "https://github.com/adobe-fonts/source-sans",
+    "advisory": "All local eot/ttf/woff/woff2 weights/styles inventoried by SHA; no remote font fetch required."
+  },
+  {
+    "prefix": "jquery-pjax/",
+    "name": "jQuery PJAX",
+    "baseline": "unversioned261a97aa derivative",
+    "version": "2.0.1",
+    "license": "MIT",
+    "source": "https://github.com/defunkt/jquery-pjax/tree/v2.0.1",
+    "package": "jquery-pjax",
+    "advisory": "Compatible upstream2.0.1 adds jQuery3 Event.addProp guard; public PJAX submit/history API retained and browser verified."
+  },
+  {
+    "prefix": "laravel-admin/",
+    "name": "Encore Laravel Admin package UI assets",
+    "baseline": "261a97aa + accepted package baseline",
+    "version": "PHP85/Laravel13 candidate",
+    "license": "MIT",
+    "source": "https://github.com/z-song/laravel-admin",
+    "advisory": "Owned narrow Bootstrap sanitized-control allowlist; event handlers, executable URLs, form destinations and sanitizer-control data attrs excluded."
+  },
+  {
+    "prefix": "nestable/",
+    "name": "Nestable",
+    "baseline": "unversioned2012 snapshot261a97aa",
+    "version": "261a97aa content-addressed snapshot",
+    "license": "MIT (choose dual MIT/BSD)",
+    "source": "https://github.com/dbushell/Nestable"
+  },
+  {
+    "prefix": "nprogress/",
+    "name": "NProgress",
+    "baseline": "0.2.0",
+    "version": "0.2.0",
+    "license": "MIT",
+    "source": "https://github.com/rstacruz/nprogress/tree/v0.2.0",
+    "package": "nprogress"
+  },
+  {
+    "prefix": "number-input/",
+    "name": "Bootstrap Number Input / bootstrap-spin",
+    "baseline": "1.0",
+    "version": "1.0 vendored snapshot261a97aa",
+    "license": "Apache-2.0",
+    "source": "https://github.com/wpic/bootstrap-number-input"
+  },
+  {
+    "prefix": "sweetalert2/",
+    "name": "SweetAlert2",
+    "baseline": "7.26.12",
+    "version": "7.26.12",
+    "license": "MIT",
+    "source": "https://github.com/sweetalert2/sweetalert2/tree/v7.26.12",
+    "package": "sweetalert2"
+  },
+  {
+    "prefix": "moment/",
+    "name": "Moment.js and locale bundle",
+    "baseline": "2.10.6",
+    "version": "2.31.0",
+    "license": "MIT",
+    "source": "https://github.com/moment/moment/tree/2.31.0",
+    "package": "moment",
+    "advisory": "Replaced affected2.10.6; locale/regex/path advisories recorded from primary npm response. Existing calendar formats and locales retained."
+  },
+  {
+    "prefix": "toastr/",
+    "name": "Toastr",
+    "baseline": "2.1.3",
+    "version": "2.1.4",
+    "license": "MIT",
+    "source": "https://github.com/CodeSeven/toastr/tree/2.1.4",
+    "package": "toastr"
+  },
+  {
+    "prefix": "licenses/",
+    "name": "Distribution license texts",
+    "baseline": "not present",
+    "version": "candidate notice collection",
+    "license": "Per named upstream file",
+    "source": "tools/assets/build.mjs"
+  },
+  {
+    "prefix": "THIRD_PARTY_NOTICES.md",
+    "name": "Third-party notice index",
+    "baseline": "not present",
+    "version": "candidate inventory",
+    "license": "Per listed library",
+    "source": "tools/assets/library-metadata.json"
+  }
+]

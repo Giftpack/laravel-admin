@@ -30,6 +30,7 @@ class SwitchGroup extends SwitchDisplay
     {
         return Admin::component('admin::grid.inline-edit.switch-group', [
             'class'    => 'grid-switch-'.str_replace('.', '-', $name),
+            'controlClass' => 'grid-switch-'.$this->getControlId($name),
             'key'      => $this->getKey(),
             'resource' => $this->getResource(),
             'name'     => $this->getPayloadName($name),

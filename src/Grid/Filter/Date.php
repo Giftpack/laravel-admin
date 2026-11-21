@@ -14,6 +14,19 @@ class Date extends AbstractFilter
      */
     protected $fieldName = 'date';
 
+    public function condition($inputs)
+    {
+        $value = \Illuminate\Support\Arr::get($inputs, $this->column);
+        if (!is_scalar($value) || $value === '') {
+            return;
+        }
+        $rules = ['date' => 'date_format:Y-m-d', 'day' => 'integer|between:1,31', 'month' => 'integer|between:1,12', 'year' => 'integer|between:1,9999'];
+        if (validator(['value' => $value], ['value' => $rules[$this->fieldName]])->fails()) {
+            return;
+        }
+        return parent::condition($inputs);
+    }
+
     /**
      * {@inheritdoc}
      */

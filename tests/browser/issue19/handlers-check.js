@@ -1,0 +1,9 @@
+async(page)=>{
+const origin=new URL(page.url()).origin;await page.goto(origin+'/control/records');await page.waitForLoadState('networkidle');
+const handlers=()=>page.evaluate(()=>Object.entries(jQuery._data(document,'events')||{}).flatMap(([type,rows])=>rows.filter(h=>/adminInline/.test(h.namespace||'')).map(h=>({type,namespace:h.namespace,selector:h.selector||null}))));
+const before=await handlers();const link=page.locator('.sidebar-menu a[href="'+origin+'/control"]').first();if(!await link.isVisible())await page.locator('.sidebar-menu .treeview > a').first().click();await link.waitFor({state:'visible'});
+for(let i=0;i<3;i++){const response=page.waitForResponse(r=>r.request().headers()['x-pjax']==='true');await link.click();await response;await page.waitForFunction(()=>jQuery.active===0);await page.getByRole('heading',{name:'Grid interaction fixture'}).waitFor();}
+const after=await handlers();await page.getByRole('heading',{name:'Grid interaction fixture'}).click();let writes=0;const observe=r=>{if(r.request().method()==='POST'&&new URL(r.url()).pathname==='/control/records/1')writes++;};page.on('response',observe);
+const title='Single handler '+Date.now();await page.locator('td.column-title a').first().click();await page.getByRole('tooltip').getByRole('textbox').fill(title);const updated=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/control/records/1');await page.getByRole('tooltip').getByRole('button',{name:'admin.submit',exact:true}).click();await updated;await page.waitForFunction(()=>jQuery.active===0);page.off('response',observe);
+const state=await(await page.request.get(origin+'/control/fixture-state')).json();if(writes!==1||state.records.find(x=>x.id===1).title!==title)throw Error('Actual current inline interaction duplicated or failed');return{before,after,delta:after.filter(x=>!before.some(y=>JSON.stringify(x)===JSON.stringify(y))),intended_requests:writes,database_mutation:true};
+}

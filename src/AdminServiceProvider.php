@@ -100,7 +100,15 @@ class AdminServiceProvider extends ServiceProvider
      */
     protected function ensureHttps()
     {
-        $is_admin = Str::startsWith(request()->getRequestUri(), '/'.ltrim(config('admin.route.prefix'), '/'));
+        if ($this->app->runningInConsole()) {
+            return;
+        }
+
+        $prefix = trim(config('admin.route.prefix'), '/');
+        $path = trim(request()->path(), '/');
+        $domain = config('admin.route.domain');
+        $is_admin = ($prefix === '' || $path === $prefix || Str::startsWith($path, $prefix.'/'))
+            && (!$domain || request()->getHost() === $domain);
         if ((config('admin.https') || config('admin.secure')) && $is_admin) {
             url()->forceScheme('https');
             $this->app['request']->server->set('HTTPS', true);
@@ -115,6 +123,7 @@ class AdminServiceProvider extends ServiceProvider
     protected function registerPublishing()
     {
         if ($this->app->runningInConsole()) {
+            $this->publishes([__DIR__.'/../resources/views' => resource_path('views/vendor/admin')], 'laravel-admin-views');
             $this->publishes([__DIR__.'/../config' => config_path()], 'laravel-admin-config');
             if (version_compare($this->app->version(), '9.0.0', '>=')) {
                 $this->publishes([__DIR__.'/../resources/lang' => base_path('lang')], 'laravel-admin-lang');
@@ -133,11 +142,11 @@ class AdminServiceProvider extends ServiceProvider
      */
     protected function compatibleBlade()
     {
-        $reflectionClass = new \ReflectionClass('\Illuminate\View\Compilers\BladeCompiler');
-
-        if ($reflectionClass->hasMethod('withoutDoubleEncoding')) {
-            Blade::withoutDoubleEncoding();
-        }
+        $this->app['view.engine.resolver']->register('blade', function () {
+            return new \Illuminate\View\Engines\CompilerEngine(
+                new View\AdminCompiler($this->app['blade.compiler']), $this->app['files']
+            );
+        });
     }
 
     /**
@@ -171,6 +180,19 @@ class AdminServiceProvider extends ServiceProvider
      */
     public function register()
     {
+        // Merge before auth and route registration, including hosts with no published config.
+        $defaults = require __DIR__.'/../config/admin.php';
+        $merge = function (array $defaults, array $overrides) use (&$merge): array {
+            foreach ($overrides as $key => $value) {
+                $defaults[$key] = is_array($value) && !array_is_list($value)
+                    && isset($defaults[$key]) && is_array($defaults[$key])
+                    ? $merge($defaults[$key], $value) : $value;
+            }
+
+            return $defaults;
+        };
+        $this->app['config']->set('admin', $merge($defaults, config('admin', [])));
+
         $this->loadAdminAuthConfig();
 
         $this->registerRouteMiddleware();
@@ -197,6 +219,12 @@ class AdminServiceProvider extends ServiceProvider
      */
     protected function registerRouteMiddleware()
     {
+        // Explicit cookie overrides must surround the web cookie/session middleware,
+        // including when consumers list admin.session after web in their route group.
+        $this->callAfterResolving(\Illuminate\Contracts\Http\Kernel::class, function ($kernel) {
+            $kernel->prependToMiddlewarePriority(Middleware\Session::class);
+        });
+
         // register route middleware.
         foreach ($this->routeMiddleware as $key => $middleware) {
             app('router')->aliasMiddleware($key, $middleware);

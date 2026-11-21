@@ -25,23 +25,26 @@ class Image extends File
      *
      * @return string
      */
-    public function prepare($image)
+    protected function prepareUpload($image)
     {
         if ($this->picker) {
-            return parent::prepare($image);
+            return parent::prepareUpload($image);
         }
 
-        if (request()->has(static::FILE_DELETE_FLAG)) {
-            return $this->destroy();
+        if ($this->deletingUpload(request()->all())) {
+            $this->destroy();
+            return null;
         }
+        if ($image === null || $image === '') return $this->original();
 
         $this->name = $this->getStoreName($image);
 
         $this->callInterventionMethods($image->getRealPath());
 
-        $path = $this->uploadAndDeleteOriginal($image);
+        $path = $this->upload($image);
 
         $this->uploadAndDeleteOriginalThumbnail($image);
+        $this->destroy();
 
         return $path;
     }

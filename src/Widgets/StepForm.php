@@ -24,6 +24,12 @@ class StepForm extends Form
      */
     protected $buttons = [];
 
+    protected $stateKey;
+
+    protected $workflow;
+
+    protected $contextToken;
+
     /**
      * @param array $data
      *
@@ -46,7 +52,7 @@ class StepForm extends Form
      */
     protected function remember($data)
     {
-        session()->put("steps.{$this->current}", $data);
+        session()->put($this->sessionKey().'.'.$this->current, $data);
     }
 
     /**
@@ -56,6 +62,9 @@ class StepForm extends Form
     {
         $index = array_search($this->current, $this->steps);
 
+        if ($index === false || !array_key_exists($index + 1, $this->steps)) {
+            throw new \LogicException('No next form step.');
+        }
         $step = $this->steps[$index + 1];
 
         $nextUrl = $this->url.'?'.http_build_query(compact('step'));
@@ -70,7 +79,7 @@ class StepForm extends Form
      */
     protected function all()
     {
-        $prev = session()->get('steps', []);
+        $prev = session()->get($this->sessionKey(), []);
 
         return array_merge($prev, [$this->current => request()->all()]);
     }
@@ -80,7 +89,20 @@ class StepForm extends Form
      */
     protected function clear()
     {
-        session()->remove('steps');
+        session()->forget($this->sessionKey());
+        foreach (session()->get('admin_step_contexts', []) as $token => $context) {
+            if (($context['stateKey'] ?? null) === $this->sessionKey()) {
+                session()->forget('admin_step_contexts.'.$token);
+            }
+        }
+    }
+
+    /** Set the same server-owned identity on every step of a workflow. */
+    public function setWorkflow(string $workflow)
+    {
+        $this->workflow = $workflow;
+
+        return $this;
     }
 
     /**
@@ -124,6 +146,14 @@ class StepForm extends Form
         parent::prepareForm();
 
         $url = request()->url();
+        $this->url = $this->url ?: $url;
+        $this->contextToken = $this->contextToken ?: bin2hex(random_bytes(20));
+        session()->put('admin_step_contexts.'.$this->contextToken, [
+            'class' => static::class, 'url' => $this->url,
+            'current' => $this->current, 'steps' => $this->steps,
+            'stateKey' => $this->sessionKey(), 'workflow' => $this->workflow ?? static::class,
+        ]);
+        $this->hidden('_step_context')->default($this->contextToken);
 
         $this->hidden('_url')->default($url);
         $this->hidden('_current')->default($this->current);
@@ -163,20 +193,41 @@ class StepForm extends Form
         $this->html($footer);
     }
 
-    /**
-     * @return $this
-     */
+    /** Restore approved navigation before subclass field/rule construction. */
+    public function validate(\Illuminate\Http\Request $request)
+    {
+        $this->restoreContext();
+
+        return parent::validate($request);
+    }
+
+    protected function restoreContext()
+    {
+        $token = request('_step_context');
+        $context = is_string($token) ? session()->get('admin_step_contexts.'.$token) : null;
+        abort_unless(is_array($context) && ($context['class'] ?? null) === static::class && is_string($context['workflow'] ?? null), 403, 'Invalid form step.');
+        $this->contextToken = $token;
+        $this->url = $context['url'];
+        $this->current = $context['current'];
+        $this->steps = $context['steps'];
+        $this->stateKey = $context['stateKey'];
+        $this->workflow = $context['workflow'];
+    }
+
     public function sanitize()
     {
-        $this->setUrl(request('_url'))
-            ->setCurrent(request('_current'))
-            ->setSteps(explode(',', request('_steps')));
+        $this->restoreContext();
 
-        foreach (['_form_', '_token', '_url', '_current', '_steps'] as $key) {
+        foreach (['_form_', '_token', '_context', '_step_context', '_url', '_current', '_steps'] as $key) {
             request()->request->remove($key);
         }
 
         return $this;
+    }
+
+    protected function sessionKey()
+    {
+        return $this->stateKey ?: 'admin_steps.'.hash('sha256', ($this->url ?: request()->url()).'|'.json_encode([$this->steps, $this->workflow ?? static::class], JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -184,6 +235,6 @@ class StepForm extends Form
      */
     public function data()
     {
-        return session()->get('steps.'.$this->current, []);
+        return session()->get($this->sessionKey().'.'.$this->current, parent::data());
     }
 }

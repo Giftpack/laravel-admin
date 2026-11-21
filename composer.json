@@ -17,17 +17,17 @@
         }
     ],
     "require": {
-        "php": ">=8.2",
-        "symfony/dom-crawler": "^7.2",
-        "laravel/framework": "^12.0",
-        "doctrine/dbal": "^4.2",
-        "fakerphp/faker": "^1.24"
+        "php": "~8.5.13",
+        "symfony/dom-crawler": "^7.4.12",
+        "laravel/framework": "^13.40"
     },
     "require-dev": {
-        "laravel/laravel": "^12.0",
+        "fakerphp/faker": "^1.24",
         "intervention/image": "^3.11",
-        "laravel/browser-kit-testing": "^7.2",
-        "spatie/phpunit-watcher": "^1.24"
+        "laravel/browser-kit-testing": "^7.3",
+        "phpunit/phpunit": "^12.5.8",
+        "spatie/phpunit-watcher": "^1.24",
+        "mockery/mockery": "^1.6.15"
     },
     "autoload": {
         "psr-4": {
@@ -50,8 +50,11 @@
         "test": "./vendor/bin/phpunit"
     },
     "suggest": {
-        "intervention/image": "Required to handling and manipulation upload images (~2.3).",
-        "spatie/eloquent-sortable": "Required to built orderable gird."
+        "intervention/image": "Optional image transforms/thumbnails; tested 3.11.0 and 3.11.10.",
+        "maatwebsite/excel": "Optional XLSX exporter; tested 4.0.7 with PhpSpreadsheet 5.11.0; typed subclass migration required.",
+        "mews/captcha": "Optional captcha field; tested 3.5.1.",
+        "spatie/eloquent-sortable": "Optional orderable grids; tested 5.0.1.",
+        "matthiasmullie/minify": "Optional admin:minify command; tested 1.3.76."
     },
     "extra": {
         "laravel": {
@@ -62,5 +65,27 @@
                 "Admin": "Encore\\Admin\\Facades\\Admin"
             }
         }
+    },
+    "conflict": {
+        "symfony/clock": "<7.4.0 || >=8.0",
+        "symfony/console": "<7.4.0 || >=8.0",
+        "symfony/css-selector": "<7.4.0 || >=8.0",
+        "symfony/dom-crawler": "<7.4.12 || >=8.0",
+        "symfony/error-handler": "<7.4.0 || >=8.0",
+        "symfony/event-dispatcher": "<7.4.0 || >=8.0",
+        "symfony/filesystem": "<7.4.23 || >=8.0",
+        "symfony/finder": "<7.4.0 || >=8.0",
+        "symfony/http-foundation": "<7.4.23 || >=8.0",
+        "symfony/http-kernel": "<7.4.23 || >=8.0",
+        "symfony/mailer": "<7.4.12 || >=8.0",
+        "symfony/mime": "<7.4.22 || >=8.0",
+        "symfony/process": "<7.4.5 || >=8.0",
+        "symfony/routing": "<7.4.23 || >=8.0",
+        "symfony/string": "<7.4.0 || >=8.0",
+        "symfony/translation": "<7.4.0 || >=8.0",
+        "symfony/uid": "<7.4.0 || >=8.0",
+        "symfony/var-dumper": "<7.4.0 || >=8.0",
+        "symfony/yaml": "<7.4.23 || >=8.0",
+        "symfony/polyfill-php83": "<1.31"
     }
 }

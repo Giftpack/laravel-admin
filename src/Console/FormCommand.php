@@ -6,6 +6,8 @@ use Illuminate\Console\GeneratorCommand;
 
 class FormCommand extends GeneratorCommand
 {
+    use ValidatesGeneratedClass;
+
     /**
      * The console command name.
      *
@@ -35,7 +37,7 @@ class FormCommand extends GeneratorCommand
     {
         $stub = parent::replaceClass($stub, $name);
 
-        return str_replace('DummyTitle', $this->option('title'), $stub);
+        return str_replace("'DummyTitle'", var_export((string) $this->option('title'), true), $stub);
     }
 
     /**

@@ -1,5 +1,10 @@
 # Change log
 
+## 2.0候選版（未發布）
+
+實測PHP8.5.13、Laravel13.40.0／13.43.0、Symfony7.4、PostgreSQL15.14／MySQL8.4.13。保留UI／builder／55欄位別名／18指令，使用原生schema取代DBAL。必要遷移包含POST＋CSRF登出、簽名context／明確授權、日誌遮蔽、選擇性更新安全資源與快取清除、CSV標準escape與Excel4型別。開發Mockery最低1.6.15。既有安裝同機升級及備份還原均已演練；未發布／push／部署。外部擴充、實際雲端、MongoDB仍未認證。詳見[升級與回復](upgrade.md)。
+
+
 ## v1.2.9、v1.3.3、v1.4.1
 
 - 添加用户设置和修改头像功能

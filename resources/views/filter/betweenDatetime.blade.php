@@ -10,7 +10,7 @@
                    id="{{$id['start']}}"
                    placeholder="{{$label}}"
                    name="{{$name['start']}}"
-                   value="{{ request()->input("{$column}.start", \Illuminate\Support\Arr::get($value, 'start')) }}"
+                   value="{{ \Illuminate\Support\Arr::get($value, 'start') }}"
                    autocomplete="off"
             />
 
@@ -21,7 +21,7 @@
                    id="{{$id['end']}}"
                    placeholder="{{$label}}"
                    name="{{$name['end']}}"
-                   value="{{ request()->input("{$column}.end", \Illuminate\Support\Arr::get($value, 'end')) }}"
+                   value="{{ \Illuminate\Support\Arr::get($value, 'end') }}"
                    autocomplete="off"
             />
         </div>

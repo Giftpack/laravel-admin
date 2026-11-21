@@ -6,9 +6,10 @@ Admin::routes();
 
 Route::group([
     'prefix'        => config('admin.route.prefix'),
+    'domain'       => config('admin.route.domain'),
     'namespace'     => config('admin.route.namespace'),
     'middleware'    => config('admin.route.middleware'),
-    'as'            => config('admin.route.prefix') . '.',
+    'as'            => config('admin.route.name_prefix', 'admin') . '.',
 ], function (Router $router) {
 
     $router->get('/', 'HomeController@index')->name('home');

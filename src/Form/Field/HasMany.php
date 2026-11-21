@@ -36,7 +36,7 @@ class HasMany extends Field
      *
      * @var array
      */
-    protected $value = [];
+    protected $value = null;
 
     /**
      * View Mode.
@@ -107,74 +107,89 @@ class HasMany extends Field
     public function getValidator(array $input)
     {
         if (!array_key_exists($this->column, $input)) {
-            return false;
+            return parent::getValidator($input);
         }
 
-        $input = Arr::only($input, $this->column);
-
-        /** unset item that contains remove flag */
-        foreach ($input[$this->column] as $key => $value) {
-            if ($value[NestedForm::REMOVE_FLAG_NAME]) {
-                unset($input[$this->column][$key]);
-            }
-        }
-
-        $form = $this->buildNestedForm($this->column, $this->builder);
-
-        $rules = $attributes = [];
-
-        /* @var Field $field */
-        foreach ($form->fields() as $field) {
-            if (!$fieldRules = $field->getRules()) {
-                continue;
-            }
-
-            $column = $field->column();
-
-            if (is_array($column)) {
-                foreach ($column as $key => $name) {
-                    $rules[$name.$key] = $fieldRules;
-                }
-
-                $this->resetInputKey($input, $column);
-            } else {
-                $rules[$column] = $fieldRules;
-            }
-
-            $attributes = array_merge(
-                $attributes,
-                $this->formatValidationAttribute($input, $field->label(), $column)
-            );
-        }
-
-        Arr::forget($rules, NestedForm::REMOVE_FLAG_NAME);
-
-        if (empty($rules)) {
-            return false;
-        }
-
-        $newRules = [];
-        $newInput = [];
-
-        foreach ($rules as $column => $rule) {
-            foreach (array_keys($input[$this->column]) as $key) {
-                $newRules["{$this->column}.$key.$column"] = $rule;
-                if (isset($input[$this->column][$key][$column]) &&
-                    is_array($input[$this->column][$key][$column])) {
-                    foreach ($input[$this->column][$key][$column] as $vkey => $value) {
-                        $newInput["{$this->column}.$key.{$column}$vkey"] = $value;
+        $rows = $input[$this->column];
+        $validator = \validator($input, [$this->column => $this->getRules()]);
+        $validator->after(function ($validator) use ($rows) {
+            foreach ($rows as $key => $row) {
+                if (($row[NestedForm::REMOVE_FLAG_NAME] ?? 0) == 1) continue;
+                $form = $this->buildNestedForm($this->column, $this->builder);
+                $context = $this->nestedValidationModel($key, $row);
+                foreach ($form->fields() as $field) {
+                    $field->setValidationModel($context);
+                    if ($field instanceof File || $field instanceof MultipleFile) {
+                        $original = $context->toArray();
+                        if ($field instanceof File && is_string($field->column()) && !str_contains($field->column(), '.')) {
+                            $original[$field->column()] = $context->getRawOriginal($field->column());
+                        }
+                        $field->setOriginal($original);
+                    }
+                    if ($field->isReadOnly()) continue;
+                    if ($nested = $field->getValidator($row)) {
+                        foreach ($nested->errors()->messages() as $column => $messages) {
+                            foreach ($messages as $message) $validator->errors()->add("{$this->column}.$key.$column", $message);
+                        }
                     }
                 }
             }
+            $rules = [];
+            $this->appendDistinctRules($rules);
+            $activeRows = array_filter($rows, static fn ($row) => ($row[NestedForm::REMOVE_FLAG_NAME] ?? 0) != 1);
+            foreach (\validator([$this->column => $activeRows], $rules)->errors()->messages() as $column => $messages) {
+                foreach ($messages as $message) $validator->errors()->add($column, $message);
+            }
+        });
+        return $validator;
+    }
+
+    protected function nestedValidationModel($key, array $row): \Illuminate\Database\Eloquent\Model
+    {
+        $relation = $this->validationModel()->{$this->relationName}();
+        $id = Arr::get($row, $relation->getRelated()->getKeyName());
+        if ($id === null || $id === '') {
+            if (str_starts_with((string) $key, 'new_')) {
+                return $relation->getRelated()->newInstance();
+            }
+            $id = $key;
         }
 
-        if (empty($newInput)) {
-            $newInput = $input;
+        return $relation->find($id) ?: $relation->getRelated()->newInstance();
+    }
+
+    public function sanitizeOldInput(array $input): array
+    {
+        foreach ($input[$this->column] ?? [] as $key => $row) {
+            foreach ($this->buildNestedForm($this->column, $this->builder)->fields() as $field) {
+                if ($field instanceof Password) Arr::forget($row, (array) $field->column());
+                if (method_exists($field, 'sanitizeOldInput')) {
+                    $row = $field->sanitizeOldInput($row);
+                }
+            }
+            $input[$this->column][$key] = $row;
         }
+        return $input;
+    }
 
-        $this->appendDistinctRules($newRules);
-
-        return \validator($newInput, $newRules, $this->getValidationMessages(), $attributes);
+    public function inputShapeErrors(array $input): array
+    {
+        if (!array_key_exists($this->column, $input)) return [];
+        if (!is_array($input[$this->column])) return [$this->column];
+        $errors = [];
+        foreach ($input[$this->column] as $key => $row) {
+            if (!is_array($row) || ((string) $key === '' || strpbrk((string) $key, '.[]') !== false)
+                || (isset($row[NestedForm::REMOVE_FLAG_NAME]) && !in_array($row[NestedForm::REMOVE_FLAG_NAME], [0, 1, '0', '1'], true))) {
+                $errors[] = $this->column;
+                continue;
+            }
+            if (($row[NestedForm::REMOVE_FLAG_NAME] ?? 0) == 1) continue;
+            foreach ($this->buildNestedForm($this->column, $this->builder)->fields() as $field) {
+                if ($field->isReadOnly()) continue;
+                foreach ($field->inputShapeErrors($row) as $column) $errors[] = "{$this->column}.$key.$column";
+            }
+        }
+        return array_unique($errors);
     }
 
     /**
@@ -338,7 +353,9 @@ class HasMany extends Field
 
         call_user_func($builder, $form);
 
-        $form->hidden($this->getKeyName());
+        if (!$form->fields()->contains(fn (Field $field) => $field->column() === $this->getKeyName())) {
+            $form->hidden($this->getKeyName());
+        }
 
         $form->hidden(NestedForm::REMOVE_FLAG_NAME)->default(0)->addElementClass(NestedForm::REMOVE_FLAG_CLASS);
 
@@ -425,29 +442,30 @@ class HasMany extends Field
          *
          * Else get data from database.
          */
-        if ($values = old($this->column)) {
+        if (session()->hasOldInput($this->column)) {
+            $values = old($this->column, []);
             foreach ($values as $key => $data) {
-                if ($data[NestedForm::REMOVE_FLAG_NAME] == 1) {
+                if (($data[NestedForm::REMOVE_FLAG_NAME] ?? 0) == 1) {
                     continue;
                 }
 
                 $model = $relation->getRelated()->replicate()->forceFill($data);
 
                 $forms[$key] = $this->buildNestedForm($this->column, $this->builder, $model)
-                    ->fill($data);
+                    ->setKey($key)->fill($data);
             }
         } else {
-            if (empty($this->value)) {
+            if (empty($this->value())) {
                 return [];
             }
 
-            foreach ($this->value as $data) {
+            foreach ($this->value() as $data) {
                 $key = Arr::get($data, $relation->getRelated()->getKeyName());
 
                 $model = $relation->getRelated()->replicate()->forceFill($data);
 
                 $forms[$key] = $this->buildNestedForm($this->column, $this->builder, $model)
-                    ->fill($data);
+                    ->setKey($key)->fill($data);
             }
         }
 
@@ -489,6 +507,10 @@ class HasMany extends Field
          */
         $script = <<<EOT
 var index = 0;
+$('#has-many-{$this->column}').find('[name]').each(function () {
+    var match = this.name.match(/\[new_(\d+)\]/);
+    if (match) index = Math.max(index, Number(match[1]));
+});
 $('#has-many-{$this->column}').off('click', '.add').on('click', '.add', function () {
 
     var tpl = $('template.{$this->column}-tpl');
@@ -510,7 +532,7 @@ $('#has-many-{$this->column}').off('click', '.remove').on('click', '.remove', fu
 
 EOT;
 
-        Admin::script($script);
+        Admin::script("(function () {\n".$script."\n})();");
     }
 
     /**
@@ -544,6 +566,10 @@ $('#has-many-{$this->column} > .nav').off('click', 'i.close-tab').on('click', 'i
 });
 
 var index = 0;
+$('#has-many-{$this->column}').find('[name]').each(function () {
+    var match = this.name.match(/\[new_(\d+)\]/);
+    if (match) index = Math.max(index, Number(match[1]));
+});
 $('#has-many-{$this->column} > .header').off('click', '.add').on('click', '.add', function(){
     index++;
     var navTabHtml = $('#has-many-{$this->column} > template.nav-tab-tpl').html().replace(/{$defaultKey}/g, index);
@@ -565,7 +591,7 @@ if ($('.has-error').length) {
 }
 EOT;
 
-        Admin::script($script);
+        Admin::script("(function () {\n".$script."\n})();");
     }
 
     /**
@@ -589,7 +615,11 @@ EOT;
          */
         $script = <<<EOT
 var index = 0;
-$('#has-many-{$this->column}').on('click', '.add', function () {
+$('#has-many-{$this->column}').find('[name]').each(function () {
+    var match = this.name.match(/\[new_(\d+)\]/);
+    if (match) index = Math.max(index, Number(match[1]));
+});
+$('#has-many-{$this->column}').off('click', '.add').on('click', '.add', function () {
 
     var tpl = $('template.{$this->column}-tpl');
 
@@ -601,7 +631,7 @@ $('#has-many-{$this->column}').on('click', '.add', function () {
     return false;
 });
 
-$('#has-many-{$this->column}').on('click', '.remove', function () {
+$('#has-many-{$this->column}').off('click', '.remove').on('click', '.remove', function () {
     var first_input_name = $(this).closest('.has-many-{$this->column}-form').find('input[name]:first').attr('name');
     if (first_input_name.match('{$this->column}\\\[new_')) {
         $(this).closest('.has-many-{$this->column}-form').remove();
@@ -615,7 +645,7 @@ $('#has-many-{$this->column}').on('click', '.remove', function () {
 
 EOT;
 
-        Admin::script($script);
+        Admin::script("(function () {\n".$script."\n})();");
     }
 
     /**

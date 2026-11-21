@@ -5,6 +5,7 @@ namespace Encore\Admin\Console;
 use Illuminate\Console\GeneratorCommand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 
 class MakeCommand extends GeneratorCommand
 {
@@ -50,37 +51,46 @@ class MakeCommand extends GeneratorCommand
     public function handle()
     {
         $this->modelName = $this->getModelName();
-        $this->controllerName = $this->getControllerName();
-
         if (!$this->modelExists()) {
-            $this->error('Model does not exists !');
-
-            return false;
+            $this->error('The model must be an existing, instantiable Eloquent model class.');
+            return self::FAILURE;
         }
 
-        $stub = $this->option('stub');
-
-        if ($stub and !is_file($stub)) {
-            $this->error('The stub file dose not exist.');
-
-            return false;
+        try {
+            $this->controllerName = $this->getControllerName();
+            foreach ([$this->controllerName, $this->option('namespace')] as $name) {
+                if ($name !== null && !preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*(?:[\\\\\/][a-zA-Z_][a-zA-Z0-9_]*)*$/', ltrim($name, '\\'))) {
+                    throw new \InvalidArgumentException('The controller name and namespace must be valid PHP class names.');
+                }
+            }
+            if (($stub = $this->option('stub')) && (!is_file($stub) || !is_readable($stub))) {
+                throw new \InvalidArgumentException('The stub file does not exist or is not readable.');
+            }
+            $this->generator = $this->modelName ? new ResourceGenerator($this->modelName) : null;
+            if ($this->option('output')) {
+                if ($this->generator === null) {
+                    throw new \InvalidArgumentException('The --output option requires a model.');
+                }
+                $this->output($this->modelName);
+                return self::SUCCESS;
+            }
+            // Validate the complete source before GeneratorCommand creates directories or writes a file.
+            $this->assertCompiles($this->buildClass($this->qualifyClass($this->getNameInput())));
+            if (parent::handle() === false) {
+                return self::FAILURE;
+            }
+        } catch (\Throwable $exception) {
+            $this->error($exception->getMessage());
+            return self::FAILURE;
         }
 
-        $this->generator = new ResourceGenerator($this->modelName);
-
-        if ($this->option('output')) {
-            return $this->output($this->modelName);
-        }
-
-        if (parent::handle() !== false) {
+        if ($this->modelName) {
             $path = Str::plural(Str::kebab(class_basename($this->modelName)));
-
             $this->line('');
             $this->comment('Add the following route to app/Admin/routes.php:');
-            $this->line('');
             $this->info("    \$router->resource('{$path}', {$this->controllerName}::class);");
-            $this->line('');
         }
+        return self::SUCCESS;
     }
 
     /**
@@ -136,7 +146,9 @@ class MakeCommand extends GeneratorCommand
             return true;
         }
 
-        return class_exists($this->modelName) && is_subclass_of($this->modelName, Model::class);
+        return is_string($this->modelName) && class_exists($this->modelName)
+            && is_subclass_of($this->modelName, Model::class)
+            && (new \ReflectionClass($this->modelName))->isInstantiable();
     }
 
     /**
@@ -150,26 +162,19 @@ class MakeCommand extends GeneratorCommand
     protected function replaceClass($stub, $name)
     {
         $stub = parent::replaceClass($stub, $name);
+        if ($this->generator === null) {
+            return $stub;
+        }
 
-        return str_replace(
-            [
-                'DummyModelNamespace',
-                'DummyTitle',
-                'DummyModel',
-                'DummyGrid',
-                'DummyShow',
-                'DummyForm',
-            ],
-            [
-                $this->modelName,
-                $this->getTitle(),
-                class_basename($this->modelName),
-                $this->indentCodes($this->generator->generateGrid()),
-                $this->indentCodes($this->generator->generateShow()),
-                $this->indentCodes($this->generator->generateForm()),
-            ],
-            $stub
-        );
+        return strtr($stub, [
+            'DummyTitleLiteral' => var_export($this->getTitle(), true),
+            'DummyModelNamespace' => ltrim($this->modelName, '\\'),
+            'DummyTitle' => addcslashes($this->getTitle(), "\\'"),
+            'DummyModel' => class_basename($this->modelName),
+            'DummyGrid' => $this->indentCodes($this->generator->generateGrid()),
+            'DummyShow' => $this->indentCodes($this->generator->generateShow()),
+            'DummyForm' => $this->indentCodes($this->generator->generateForm()),
+        ]);
     }
 
     /**
@@ -211,11 +216,25 @@ class MakeCommand extends GeneratorCommand
      */
     protected function getDefaultNamespace($rootNamespace)
     {
-        if ($namespace = $this->option('namespace')) {
-            return $namespace;
+        $namespace = trim(str_replace('/', '\\', (string) ($this->option('namespace') ?: config('admin.route.namespace'))), '\\');
+        $rootNamespace = trim($rootNamespace, '\\');
+        if ($namespace !== $rootNamespace && !Str::startsWith($namespace, $rootNamespace.'\\')) {
+            throw new \InvalidArgumentException("The generator namespace must be inside the application root namespace [{$rootNamespace}].");
         }
 
-        return config('admin.route.namespace');
+        return $namespace;
+    }
+
+    /** Compile without executing source or writing a destination, including compiler-only name conflicts. */
+    protected function assertCompiles($source)
+    {
+        $process = new Process([PHP_BINARY, '-l']);
+        $process->setInput($source);
+        $process->setTimeout(10);
+        $process->run();
+        if (!$process->isSuccessful()) {
+            throw new \InvalidArgumentException('Generated controller does not compile: '.trim($process->getErrorOutput().$process->getOutput()));
+        }
     }
 
     /**

@@ -18,6 +18,8 @@ class Form extends Interactor
      */
     protected $fields = [];
 
+    public $safeValidationErrors = [];
+
     /**
      * @var string
      */
@@ -423,6 +425,7 @@ class Form extends Interactor
         }
 
         $failedValidators = [];
+        $safeErrors = [];
 
         /** @var Field $field */
         foreach ($this->fields as $field) {
@@ -432,13 +435,14 @@ class Form extends Interactor
 
             if (($validator instanceof Validator) && !$validator->passes()) {
                 $failedValidators[] = $validator;
+                $safeErrors = array_merge_recursive($safeErrors, \Encore\Admin\Security\SafeValidation::errors($validator, (array) $field->column()));
             }
         }
 
-        $message = $this->mergeValidationMessages($failedValidators);
-
-        if ($message->any()) {
-            throw ValidationException::withMessages($message->toArray());
+        $this->safeValidationErrors = $safeErrors;
+        // Rejection is independent from whether a failed field can be projected safely.
+        if ($failedValidators !== []) {
+            throw ValidationException::withMessages($safeErrors ?: ['_validation' => [__('admin.failed')]]);
         }
     }
 
@@ -600,6 +604,17 @@ PROMISE;
                 _action: '{$this->action->getCalledClass()}',
             });
 
+            $(form).find('.action-validation-error').remove();
+            var showValidation = function (errors) {
+                    var \$form = $('#'+modalId+' form');
+                    \$form.find('.action-validation-error').remove();
+                    \$form.find('[aria-invalid]').removeAttr('aria-invalid');
+                    Object.keys(errors).forEach(function (name) {
+                        var \$field = \$form.find(':input').filter(function () { return this.name === name; });
+                        \$field.attr('aria-invalid', 'true');
+                        $('<div class="action-validation-error text-danger" role="alert">').text([].concat(errors[name]).join(' ')).insertAfter(\$field.last());
+                    });
+            };
             var formData = new FormData(form);
             for (var key in data) {
                 formData.append(key, data[key]);
@@ -613,6 +628,7 @@ PROMISE;
                 contentType: false,
                 processData: false,
                 success: function (data) {
+                    showValidation(data.errors || {});
                     resolve([data, target]);
                     if (data.status === true) {
                         $('#'+modalId).modal('hide');
@@ -620,6 +636,8 @@ PROMISE;
                     $(':submit', '#'+modalId).button('reset');
                 },
                 error:function(request){
+                    showValidation((request.responseJSON || {}).errors || {});
+                    $(':submit', '#'+modalId).button('reset');
                     reject(request);
                 }
             });

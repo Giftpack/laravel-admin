@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "bootstrap": "3.4.1",
+    "dompurify": "3.4.18",
+    "eonasdan-bootstrap-datetimepicker": "4.17.49",
+    "jquery": "3.8.0",
+    "jquery-pjax": "2.0.1",
+    "moment": "2.31.0",
+    "select2": "4.0.13",
+    "toastr": "2.1.4"
+  },
+  "devDependencies": {
+    "terser": "5.44.1"
+  },
+  "overrides": {
+    "moment-timezone": "0.5.48"
+  }
+}

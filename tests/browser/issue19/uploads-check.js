@@ -1,0 +1,20 @@
+async(page)=>{
+const origin=new URL(page.url()).origin;
+await page.goto(origin+'/control/parity/fields/uploads');await page.getByRole('heading',{name:'Browser fields uploads'}).waitFor();await page.waitForLoadState('networkidle');
+await page.locator('[name=title]').fill('Browser uploads');
+await page.locator('input[type=file][name=file]').setInputFiles({name:'single.txt',mimeType:'text/plain',buffer:Buffer.from('Browser owned fixture file')});
+await page.locator('input[type=file][name="files[]"]').setInputFiles(['first','second'].map(name=>({name:name+'.txt',mimeType:'text/plain',buffer:Buffer.from('Browser multiple '+name)})));
+await page.locator('input[type=file][name=image]').setInputFiles('tests/assets/test.jpg');const jpeg=await(await page.request.get(origin+'/control/fixture-image/one')).body();await page.locator('input[type=file][name="images[]"]').setInputFiles(['first','second'].map(name=>({name:'multiple-'+name+'.jpg',mimeType:'image/jpeg',buffer:jpeg})));
+
+const response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('/parity/fields/uploads'));await page.locator('button[type=submit]').filter({hasText:'admin.submit'}).first().click();await response;await page.waitForLoadState('networkidle');
+const state=await(await page.request.get(origin+'/control/parity/state')).json();const row=state.record;
+for(const name of ['file','image','files','images'])for(const path of [].concat(row[name]||[])){if(!state.files.includes(path))throw Error(name+' file absent');const res=await page.request.get(origin+'/uploads/'+path);if(res.status()!==200)throw Error(name+' published file unavailable');}
+if(!row.file||!row.image||row.files?.length!==2||row.images?.length!==2)throw Error('Missing upload persistence');
+await page.goto(origin+'/control/parity/fields/uploads');await page.locator('.file-preview-frame').first().waitFor();await page.waitForFunction(()=>document.querySelectorAll('.file-preview-image').length>=3&&Array.from(document.querySelectorAll('.file-preview-image')).every(e=>e.naturalWidth>0));await page.screenshot({path:'OUTPUT_DIR/fields-uploads.png',fullPage:true});
+await page.goto(origin+'/control/parity/fields/captcha');await page.getByRole('heading',{name:'Browser fields captcha'}).waitFor();await page.waitForLoadState('networkidle');
+const img=page.locator('img#__captcha__-captcha');if(!await img.evaluate(e=>e.naturalWidth>0))throw Error('Captcha JPEG not rendered');let src=await img.getAttribute('src');await img.click();await page.waitForFunction(old=>document.getElementById('__captcha__-captcha').src!==old,src);await page.waitForLoadState('networkidle');
+await page.locator('[name=title]').fill('Invalid captcha title');await page.locator('[name=__captcha__]').fill('incorrect');let response2=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('/parity/fields/captcha'));await page.locator('button[type=submit]').filter({hasText:'admin.submit'}).first().click();await response2;await page.waitForLoadState('networkidle');await page.locator('.has-error').waitFor();
+if((await(await page.request.get(origin+'/control/parity/state')).json()).record.title==='Invalid captcha title')throw Error('Captcha invalid wrote row');
+await page.locator('[name=title]').fill('Captcha browser persisted');await page.locator('[name=__captcha__]').fill('aaaaa');response2=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('/parity/fields/captcha'));await page.locator('button[type=submit]').filter({hasText:'admin.submit'}).first().click();await response2;await page.waitForLoadState('networkidle');if((await(await page.request.get(origin+'/control/parity/state')).json()).record.title!=='Captcha browser persisted')throw Error('Captcha valid failed persistence');
+return{file:true,image:true,multipleFile:true,multipleImage:true,real_file_storage_http_preview:true,captcha:{real_JPEG_rendered:true,refresh:true,incorrect_no_write:true,correct_persisted:true,real_package:'mews/captcha',synthetic_challenge_alphabet:'a'}};
+}

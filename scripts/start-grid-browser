@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+engine=${1:-pgsql}
+case "$engine" in pgsql) host=postgres; port=5432 ;; mysql) host=mysql; port=3306 ;; *) exit 2 ;; esac
+project="laravel-admin-browser-$(date +%s)-$$"
+export TEST_DB_CONNECTION="$engine" TEST_DB_HOST="$host" TEST_DB_PORT="$port"
+export TEST_RESULTS_DIR="$(pwd)/.scratch/php85-laravel13-upgrade/artifacts"
+fixture="$(pwd)/.scratch/php85-laravel13-upgrade/dependencies/host-${BROWSER_HOST:-current}"
+# Keep this shell alive to retain the temporary host, session files and database.
+cleanup() { docker compose -f docker-compose.yml -f scripts/grid-browser-compose.yml --env-file /dev/null -p "$project" down --volumes --remove-orphans >/dev/null; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+set -- docker compose -f docker-compose.yml -f scripts/grid-browser-compose.yml --env-file /dev/null -p "$project"
+"$@" up -d --wait "$host"
+"$@" run -d --no-deps --service-ports -v "$fixture:/host:ro" --name "$project-app" -e ISSUE19_BROWSER="${ISSUE19_BROWSER:-0}" application
+printf 'Browser URL: http://%s/control/auth/login\n' "$(docker port "$project-app" 8000/tcp)"
+printf 'Project: %s\n' "$project"
+docker logs -f "$project-app"

@@ -8,15 +8,15 @@
     "authors": [
         {
             "name": "your name",
-            "email": "your email"
+            "email": "you@example.com"
         }
     ],
     "require": {
-        "php": ">=7.0.0",
-        "encore/laravel-admin": "~1.6"
+        "php": "~8.5.13",
+        "encore/laravel-admin": "^2.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "~6.0"
+        "phpunit/phpunit": "^12.5.8"
     },
     "autoload": {
         "psr-4": {

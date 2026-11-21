@@ -8,6 +8,7 @@ use Encore\Admin\Form;
 use Encore\Admin\Widgets\Form as WidgetForm;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Renderable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Macroable;
@@ -112,6 +113,9 @@ class Field implements Renderable
      * @var array|\Closure
      */
     protected $rules = [];
+
+    /** Nested validation follows the row lifecycle while callbacks retain the parent Form. */
+    protected ?Model $validationModel = null;
 
     /**
      * The validation rules for creation.
@@ -495,7 +499,7 @@ class Field implements Renderable
      *
      * @return $this
      */
-    public function setForm(Form $form = null)
+    public function setForm(?Form $form = null)
     {
         $this->form = $form;
 
@@ -720,19 +724,28 @@ class Field implements Renderable
         return $this;
     }
 
-    /**
-     * Get validation messages for the field.
-     *
-     * @return array|mixed
-     */
+    /** Set only the validation lifecycle; keep the field's parent Form for callbacks. */
+    public function setValidationModel(Model $model): self
+    {
+        $this->validationModel = $model;
+
+        return $this;
+    }
+
+    protected function validationModel(): ?Model
+    {
+        return $this->validationModel ?? ($this->form && method_exists($this->form, 'model') ? $this->form->model() : null);
+    }
+
+    /** Get the messages for the effective create/update validation lifecycle. */
     public function getValidationMessages()
     {
         // Default validation message.
         $messages = $this->validationMessages['default'] ?? [];
 
-        if (request()->isMethod('POST')) {
+        if ($this->validationModel ? !$this->validationModel->exists : request()->isMethod('POST')) {
             $messages = $this->validationMessages['creation'] ?? $messages;
-        } elseif (request()->isMethod('PUT')) {
+        } elseif ($this->validationModel ? $this->validationModel->exists : request()->isMethod('PUT')) {
             $messages = $this->validationMessages['update'] ?? $messages;
         }
 
@@ -746,9 +759,9 @@ class Field implements Renderable
      */
     protected function getRules()
     {
-        if (request()->isMethod('POST')) {
+        if ($this->validationModel ? !$this->validationModel->exists : request()->isMethod('POST')) {
             $rules = $this->creationRules ?: $this->rules;
-        } elseif (request()->isMethod('PUT')) {
+        } elseif ($this->validationModel ? $this->validationModel->exists : request()->isMethod('PUT')) {
             $rules = $this->updateRules ?: $this->rules;
         } else {
             $rules = $this->rules;
@@ -766,7 +779,7 @@ class Field implements Renderable
             return $rules;
         }
 
-        if (!$id = $this->form->model()->getKey()) {
+        if (($id = $this->validationModel()->getKey()) === null) {
             return $rules;
         }
 
@@ -867,7 +880,7 @@ class Field implements Renderable
      *
      * @return mixed
      */
-    public function data(array $data = null)
+    public function data(?array $data = null)
     {
         if ($data === null) {
             return $this->data;
@@ -971,7 +984,8 @@ class Field implements Renderable
         }
 
         if (is_string($this->column)) {
-            if (!Arr::has($input, $this->column)) {
+            // Partial updates validate supplied fields; creates also validate missing required inputs.
+            if (!Arr::has($input, $this->column) && $this->validationModel()?->exists) {
                 return false;
             }
 
@@ -983,12 +997,11 @@ class Field implements Renderable
 
         if (is_array($this->column)) {
             foreach ($this->column as $key => $column) {
-                if (!array_key_exists($column, $input)) {
+                if (!Arr::has($input, $column) && $this->validationModel()?->exists) {
                     continue;
                 }
-                $input[$column.$key] = Arr::get($input, $column);
-                $rules[$column.$key] = $fieldRules;
-                $attributes[$column.$key] = $this->label."[$column]";
+                $rules[$column] = $fieldRules;
+                $attributes[$column] = $this->label."[$column]";
             }
         }
 
@@ -1005,12 +1018,66 @@ class Field implements Renderable
      */
     protected function sanitizeInput($input, $column)
     {
-        if ($this instanceof Field\MultipleSelect) {
+        if (($this instanceof Field\MultipleSelect || $this instanceof Field\Tags) && Arr::has($input, $column)) {
             $value = Arr::get($input, $column);
-            Arr::set($input, $column, array_filter($value));
+            Arr::set($input, $column, is_array($value) ? array_filter($value, static fn ($item) => $item !== null && is_scalar($item) && strlen((string) $item) > 0) : $value);
         }
 
         return $input;
+    }
+
+    /** Reject malformed common-field payloads before prepare() can coerce them. */
+    public function inputShapeErrors(array $input): array
+    {
+        $errors = [];
+        foreach ((array) $this->column as $column) {
+            if (!is_string($column) || !Arr::has($input, $column)) {
+                continue;
+            }
+            $value = Arr::get($input, $column);
+            if ($this instanceof Field\KeyValue) {
+                $valid = is_array($value) && isset($value['keys'], $value['values'])
+                    && is_array($value['keys']) && is_array($value['values'])
+                    && array_is_list($value['keys']) && array_is_list($value['values'])
+                    && count($value['keys']) === count($value['values'])
+                    && count(array_unique($value['keys'], SORT_REGULAR)) === count($value['keys']);
+                $items = $valid ? array_merge($value['keys'], $value['values']) : [];
+            } elseif ($this instanceof Field\ListField) {
+                $valid = is_array($value) && isset($value['values']) && is_array($value['values']);
+                $items = $valid ? $value['values'] : [];
+            } elseif ($this instanceof Field\MultipleSelect || $this instanceof Field\Tags) {
+                $valid = is_array($value);
+                $items = $valid ? $value : [];
+            } elseif ($this instanceof Field\Text || $this instanceof Field\Hidden
+                || $this instanceof Field\Select || $this instanceof Field\Radio
+                || $this instanceof Field\DateRange || $this instanceof Field\Slider
+                || $this instanceof Field\SwitchField) {
+                $valid = $value === null || is_scalar($value);
+                $items = [];
+                if ($valid && $value !== null && $value !== '' && ($this instanceof Field\Number
+                    || $this instanceof Field\Decimal || $this instanceof Field\Currency || $this instanceof Field\Rate)) {
+                    $valid = is_numeric($value);
+                }
+            } else {
+                // Specialized fields and third-party fields own their input contracts.
+                continue;
+            }
+            foreach ($items as $item) {
+                $valid = $valid && ($item === null || is_scalar($item));
+            }
+            if (!$valid) {
+                $errors[] = $column;
+            }
+        }
+        return $errors;
+    }
+
+    /** Read-only and presentation fields never accept client persistence input. */
+    public function isReadOnly(): bool
+    {
+        return !empty($this->attributes['readonly']) || !empty($this->attributes['disabled'])
+            || $this instanceof Field\Display || $this instanceof Field\Id
+            || $this instanceof Field\Button || $this instanceof Field\Divider || $this instanceof Field\Html;
     }
 
     /**
@@ -1410,7 +1477,7 @@ class Field implements Renderable
      */
     public function setLabelClass(array $labelClass, $replace = false): self
     {
-        $this->labelClass = $replace ? $labelClass : array_merge($this->labelClass, $labelClass);
+        $this->labelClass = $replace ? $labelClass : array_values(array_unique(array_merge($this->labelClass, $labelClass)));
 
         return $this;
     }

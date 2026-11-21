@@ -34,7 +34,9 @@ class InstallCommand extends Command
      */
     public function handle()
     {
-        $this->initDatabase();
+        if (!$this->initDatabase()) {
+            return self::FAILURE;
+        }
 
         $this->initAdminDirectory();
     }
@@ -46,13 +48,22 @@ class InstallCommand extends Command
      */
     public function initDatabase()
     {
-        $this->call('migrate');
-
-        $userModel = config('admin.database.users_model');
-
-        if ($userModel::count() == 0) {
-            $this->call('db:seed', ['--class' => \Encore\Admin\Auth\Database\AdminTablesSeeder::class]);
+        if ($this->call('migrate') !== self::SUCCESS) {
+            return false;
         }
+
+        // Never run the destructive legacy seeder against partially populated installations.
+        $tables = ['users_table', 'roles_table', 'permissions_table', 'menu_table',
+            'role_users_table', 'role_permissions_table', 'user_permissions_table',
+            'role_menu_table', 'operation_log_table'];
+        $connection = \Illuminate\Support\Facades\DB::connection(config('admin.database.connection') ?: null);
+        foreach ($tables as $table) {
+            if ($connection->table(config('admin.database.'.$table))->exists()) {
+                return true;
+            }
+        }
+
+        return $this->call('db:seed', ['--class' => \Encore\Admin\Auth\Database\AdminTablesSeeder::class]) === self::SUCCESS;
     }
 
     /**
