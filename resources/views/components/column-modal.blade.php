@@ -42,16 +42,16 @@
 
         $.get(url, function (data) {
             modalBody.html(data);
-        });
+        }).fail(function () { modalBody.text(@json(__('admin.failed'))); });
     };
 
-    modal.on('show.bs.modal', function (e) {
+    modal.off('.adminModal').on('show.bs.modal.adminModal', function (e) {
         var key = $(e.relatedTarget).data('key');
-        load('{{ $url }}'+'&key='+key);
-    }).on('click', '.page-item a, .filter-box a', function (e) {
+        load(@json($url)+'&key='+encodeURIComponent(key));
+    }).on('click.adminModal', '.page-item a, .filter-box a', function (e) {
         load($(this).attr('href'));
         e.preventDefault();
-    }).on('submit', '.box-header form', function (e) {
+    }).on('submit.adminModal', '.box-header form', function (e) {
         load($(this).attr('action')+'&'+$(this).serialize());
         return false;
     });

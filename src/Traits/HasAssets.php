@@ -92,7 +92,7 @@ trait HasAssets
     /**
      * @var string
      */
-    public static $jQuery = 'vendor/laravel-admin/AdminLTE/plugins/jQuery/jQuery-2.1.4.min.js';
+    public static $jQuery = 'vendor/laravel-admin/AdminLTE/plugins/jQuery/jquery.min.js';
 
     /**
      * @var array
@@ -140,9 +140,7 @@ trait HasAssets
 
         $skin = config('admin.skin', 'skin-blue-light');
 
-        array_unshift(static::$baseCss, "vendor/laravel-admin/AdminLTE/dist/css/skins/{$skin}.min.css");
-
-        return static::$baseCss;
+        return array_merge(["vendor/laravel-admin/AdminLTE/dist/css/skins/{$skin}.min.css"], static::$baseCss);
     }
 
     /**

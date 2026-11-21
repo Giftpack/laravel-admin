@@ -19,6 +19,7 @@ class Administrator extends Model implements AuthenticatableContract
     use Authenticatable;
     use HasPermissions;
     use DefaultDatetimeFormat;
+    use TransactionalGrants;
 
     protected $fillable = ['username', 'password', 'name', 'avatar'];
 

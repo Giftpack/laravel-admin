@@ -14,8 +14,9 @@ class Input extends AbstractDisplayer
             'display'  => $this->getValue(),
             'name'     => $this->getPayloadName(),
             'resource' => $this->getResource(),
-            'trigger'  => "ie-trigger-{$this->getClassName()}",
-            'target'   => "ie-template-{$this->getClassName()}",
+            'legacyTrigger' => "ie-trigger-{$this->getClassName()}",
+            'trigger'  => "ie-trigger-{$this->getControlId()}",
+            'target'   => "ie-template-{$this->getControlId()}",
             'mask'     => $mask,
         ]);
     }

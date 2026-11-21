@@ -232,22 +232,25 @@ class QuickCreate implements Renderable
     protected function script()
     {
         $url = $this->parent->resource();
+        $gridID = json_encode($this->parent->tableID);
 
         $script = <<<SCRIPT
 
 ;(function () {
 
-    $('.quick-create .create').click(function () {
-        $('.quick-create .create-form').show();
+    var \$quickCreate = $('.quick-create').filter(function () { return $(this).data('grid') === {$gridID}; });
+
+    \$quickCreate.find('.create').off('click.adminQuickCreate').on('click.adminQuickCreate',function () {
+        \$quickCreate.find('.create-form').show();
         $(this).hide();
     });
     
-    $('.quick-create .cancel').click(function () {
-        $('.quick-create .create-form').hide();
-        $('.quick-create .create').show();
+    \$quickCreate.find('.cancel').off('click.adminQuickCreate').on('click.adminQuickCreate',function () {
+        \$quickCreate.find('.create-form').hide();
+        \$quickCreate.find('.create').show();
     });
     
-    $('.quick-create .create-form').submit(function (e) {
+    \$quickCreate.find('.create-form').off('submit.adminQuickCreate').on('submit.adminQuickCreate',function (e) {
         $(':submit', e.target).button('loading');
         e.preventDefault();
     
@@ -256,7 +259,6 @@ class QuickCreate implements Renderable
             type: 'POST',
             data: $(this).serialize(),
             success: function(data, textStatus, jqXHR) {
-                console.info(data);
                 
                 if (data.status == true) {
                     $.admin.toastr.success(data.message, '', {positionClass:"toast-top-center"});
@@ -264,6 +266,8 @@ class QuickCreate implements Renderable
                     return;
                 }
                 
+                $(':submit', e.target).button('reset');
+
                 if (typeof data.validation !== 'undefined') {
                     $.admin.toastr.warning(data.message, '', {positionClass:"toast-top-center"})
                 }
@@ -301,6 +305,7 @@ SCRIPT;
         $this->script();
 
         $vars = [
+            'gridID' => $this->parent->tableID,
             'columnCount' => $columnCount,
             'fields'      => $this->fields,
         ];

@@ -6,7 +6,6 @@ use Encore\Admin\Traits\DefaultDatetimeFormat;
 use Encore\Admin\Traits\ModelTree;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Class Menu.
@@ -20,6 +19,7 @@ class Menu extends Model
     use DefaultDatetimeFormat;
     use ModelTree {
         ModelTree::boot as treeBoot;
+        ModelTree::deleteTreeChildren as deleteModelTreeChildren;
     }
 
     /**
@@ -64,18 +64,30 @@ class Menu extends Model
      */
     public function allNodes(): array
     {
-        $connection = config('admin.database.connection') ?: config('database.default');
-        $orderColumn = DB::connection($connection)->getQueryGrammar()->wrap($this->orderColumn);
+        $orderColumn = $this->getConnection()->getQueryGrammar()->wrap($this->orderColumn);
 
         $byOrder = 'ROOT ASC,'.$orderColumn;
 
-        $query = static::query();
+        $query = $this->newQuery();
+        if ($this->queryCallback instanceof \Closure) {
+            $query = call_user_func($this->queryCallback, clone $this);
+        }
 
         if (config('admin.check_menu_roles') !== false) {
             $query->with('roles');
         }
 
         return $query->selectRaw('*, '.$orderColumn.' ROOT')->orderByRaw($byOrder)->get()->toArray();
+    }
+
+    /** Direct children use bulk deletion, so explicitly clean their role pivots. */
+    protected function deleteTreeChildren()
+    {
+        $children = $this->newQuery()->where($this->parentColumn, $this->getKey())->get();
+        foreach ($children as $child) {
+            $child->roles()->detach();
+        }
+        $this->deleteModelTreeChildren();
     }
 
     /**

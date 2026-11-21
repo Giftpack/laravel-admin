@@ -1,12 +1,13 @@
 
 @php($listErrorKey = "$column.values")
 
-<div class="{{$viewClass['form-group']}} {{ $errors->has($listErrorKey) ? 'has-error' : '' }}">
+<div class="{{$viewClass['form-group']}} {{ $errors->hasAny([$column, $listErrorKey]) ? 'has-error' : '' }}">
 
     <label class="{{$viewClass['label']}} control-label">{{$label}}</label>
 
     <div class="{{$viewClass['field']}}">
 
+        @include('admin::form.error')
         @if($errors->has($listErrorKey))
             @foreach($errors->get($listErrorKey) as $message)
                 <label class="control-label" for="inputError"><i class="fa fa-times-circle-o"></i> {{$message}}</label><br/>

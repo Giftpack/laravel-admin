@@ -23,17 +23,17 @@
 </div>
 
 <script>
-    var expand = $('.{{ $elementClass }}');
+    var expand = $('.{{ $elementClass }}').filter(function () { return $(this).data('name') === @json($name); });
 
     @if($async)
 
     var load = function (url, target) {
         $.get(url, function (data) {
             target.find('.html').html(data);
-        });
+        }).fail(function () { target.find('.html').text(@json(__('admin.failed'))); });
     };
 
-    expand.on('click', function (e) {
+    expand.off('click.adminExpand').on('click.adminExpand', function (e) {
         var target = $(this);
         if (target.data('inserted') == '0') {
             var key  = target.data('key');
@@ -44,25 +44,24 @@
 
             $(this).data('inserted', 1);
 
-            load('{{ $url }}'+'&key='+key, $('#grid-collapse-'+name));
+            load(@json($url)+'&key='+encodeURIComponent(key), $('#grid-collapse-'+name));
         }
 
         $("i", this).toggleClass("fa-angle-double-down fa-angle-double-up");
     });
 
-    $(document).on('pjax:click', '.collapse a.pjax, .collapse a.pjax', function (e) {
-        console.log(11111);
+    $(document).off('pjax:click.adminExpand', '.collapse a.pjax').on('pjax:click.adminExpand', '.collapse a.pjax', function (e) {
         // load($(this).attr('href'), $(this).parent('.collapse'));
         e.preventDefault();
         return false;
-    }).on('pjax:submit', '.collapse .box-header form', function (e) {
+    }).off('pjax:submit.adminExpand', '.collapse .box-header form').on('pjax:submit.adminExpand', '.collapse .box-header form', function (e) {
         // load($(this).attr('action')+'&'+$(this).serialize(), $(this).parent('.collapse'));
         return false;
     });
 
     @else
 
-    expand.on('click', function () {
+    expand.off('click.adminExpand').on('click.adminExpand', function () {
 
         if ($(this).data('inserted') == '0') {
 

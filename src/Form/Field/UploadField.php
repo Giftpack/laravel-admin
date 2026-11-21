@@ -15,7 +15,11 @@ trait UploadField
      *
      * @var string
      */
-    protected $directory = '';
+    protected $directory = null;
+
+    protected array $newUploadFiles = [];
+
+    protected $storageDisk;
 
     /**
      * File name.
@@ -23,6 +27,8 @@ trait UploadField
      * @var null
      */
     protected $name = null;
+
+    protected $configuredName = null;
 
     /**
      * Storage instance.
@@ -130,7 +136,8 @@ trait UploadField
         ];
 
         if ($this->form instanceof Form) {
-            $defaults['deleteUrl'] = $this->form->resource().'/'.$this->form->model()->getKey();
+            $defaults['deleteUrl'] = $this->form->builder()->getAction()
+                ?: $this->form->resource().'/'.$this->form->model()->getKey();
         }
 
         $defaults = array_merge($defaults, ['fileActionSettings' => $this->fileActionSettings]);
@@ -247,6 +254,7 @@ trait UploadField
     {
         try {
             $this->storage = Storage::disk($disk);
+            $this->storageDisk = $disk;
         } catch (\Exception $exception) {
             if (!array_key_exists($disk, config('filesystems.disks'))) {
                 admin_error(
@@ -289,7 +297,7 @@ trait UploadField
      */
     public function dir($dir)
     {
-        if ($dir) {
+        if ($dir !== null) {
             $this->directory = $dir;
         }
 
@@ -306,7 +314,7 @@ trait UploadField
     public function name($name)
     {
         if ($name) {
-            $this->name = $name;
+            $this->name = $this->configuredName = $name;
         }
 
         return $this;
@@ -353,12 +361,12 @@ trait UploadField
             return $this->generateSequenceName($file);
         }
 
-        if ($this->name instanceof \Closure) {
-            return $this->name->call($this, $file);
+        if ($this->configuredName instanceof \Closure) {
+            return $this->configuredName->call($this, $file);
         }
 
-        if (is_string($this->name)) {
-            return $this->name;
+        if (is_string($this->configuredName)) {
+            return $this->configuredName;
         }
 
         return $file->getClientOriginalName();
@@ -375,7 +383,7 @@ trait UploadField
             return call_user_func($this->directory, $this->form);
         }
 
-        return $this->directory ?: $this->defaultDirectory();
+        return $this->directory ?? $this->defaultDirectory();
     }
 
     /**
@@ -403,11 +411,19 @@ trait UploadField
     {
         $this->renameIfExists($file);
 
-        if (!is_null($this->storagePermission)) {
-            return $this->storage->putFileAs($this->getDirectory(), $file, $this->name, $this->storagePermission);
+        $path = $this->uploadPath();
+        $this->registerNewFile($path);
+        try {
+            $result = $this->storage->putFileAs($this->getDirectory(), $file, $this->name, $this->storagePermission ?? []);
+            if ($result === false) {
+                throw new \RuntimeException('Upload storage write failed.');
+            }
+        } catch (\Throwable $exception) {
+            $this->cleanupFile($path);
+            throw new \Encore\Admin\Form\UploadException('Upload storage write failed.');
         }
 
-        return $this->storage->putFileAs($this->getDirectory(), $file, $this->name);
+        return $result;
     }
 
     /**
@@ -419,7 +435,12 @@ trait UploadField
      */
     public function renameIfExists(UploadedFile $file)
     {
-        if ($this->storage->exists("{$this->getDirectory()}/$this->name")) {
+        $this->assertSafePath((string) $this->getDirectory(), true);
+        $this->assertSafePath($this->name);
+        if (str_contains($this->name, '/')) {
+            throw new \InvalidArgumentException('Upload names must be filenames.');
+        }
+        if ($this->storedFileExists($this->uploadPath())) {
             $this->name = $this->generateUniqueName($file);
         }
     }
@@ -437,7 +458,8 @@ trait UploadField
             $path = Arr::get($path, $this->pathColumn);
         }
 
-        if (URL::isValidUrl($path)) {
+        // Model accessors can already expose a disk URL relative to the host root.
+        if (URL::isValidUrl($path) || (is_string($path) && str_starts_with($path, '/'))) {
             return $path;
         }
 
@@ -474,7 +496,7 @@ trait UploadField
         $original = $file->getClientOriginalName();
         $new = sprintf('%s_%s.%s', $original, $index, $extension);
 
-        while ($this->storage->exists("{$this->getDirectory()}/$new")) {
+        while ($this->storedFileExists("{$this->getDirectory()}/$new")) {
             $index++;
             $new = sprintf('%s_%s.%s', $original, $index, $extension);
         }
@@ -497,9 +519,131 @@ trait UploadField
             $this->destroyThumbnail();
         }
 
-        if (!empty($this->original) && $this->storage->exists($this->original)) {
-            $this->storage->delete($this->original);
+        $this->deleteStoredFile($this->original);
+    }
+
+    protected function prepareUploadSafely(callable $callback)
+    {
+        $this->newUploadFiles = [];
+        try {
+            return $callback();
+        } catch (\Throwable $exception) {
+            foreach ($this->newUploadFiles as [$storage, $path, $disk]) $this->cleanupFile($path, $storage, $disk);
+            throw $exception;
+        } finally {
+            $this->newUploadFiles = [];
         }
+    }
+
+    /** The field's model connection owns the lifetime, including enclosing transactions. */
+    protected function uploadConnection()
+    {
+        return $this->form instanceof Form ? $this->form->model()->getConnection() : null;
+    }
+
+    protected function assertSafePath($path, bool $directory = false): void
+    {
+        if (!is_string($path) || (!$directory && $path === '') || str_starts_with($path, '/')
+            || str_contains($path, "\\") || str_contains($path, "\0") || preg_match('~(^|/)\.\.?(?:/|$)|^[a-zA-Z]+:~', $path)) {
+            throw new \InvalidArgumentException('Upload paths must stay within the configured disk.');
+        }
+    }
+
+    protected function uploadPath(): string
+    {
+        return ltrim(rtrim((string) $this->getDirectory(), '/').'/'.$this->name, '/');
+    }
+
+    /** Register before the write: an adapter may leave partial data before failing. */
+    protected function registerNewFile(string $path): void
+    {
+        $storage = $this->storage;
+        $disk = $this->storageDisk;
+        $this->newUploadFiles[] = [$storage, $path, $disk];
+        if (($connection = $this->uploadConnection()) && $connection->transactionLevel() > 0) {
+            $connection->afterRollBack(fn () => $this->cleanupFile($path, $storage, $disk));
+        }
+    }
+
+    protected function storedFileExists(string $path): bool
+    {
+        try {
+            return $this->storage->exists($path);
+        } catch (\Throwable $exception) {
+            throw new \Encore\Admin\Form\UploadException('Upload storage read failed.');
+        }
+    }
+
+    protected function cleanupFile(string $path, $storage = null, $disk = null): void
+    {
+        try {
+            if (($storage ?? $this->storage)->delete($path) === false) {
+                throw new \RuntimeException('Storage deletion failed.');
+            }
+        } catch (\Throwable $exception) {
+            // Cleanup cannot reverse a committed DB change or mask its original failure.
+            try {
+                logger()->warning('Admin upload cleanup failed; retained file requires cleanup.', ['field' => $this->column, 'disk' => $disk ?? $this->storageDisk, 'path' => $path]);
+            } catch (\Throwable $loggingFailure) {
+                // A host logging outage must not turn a committed save into a reported rollback.
+            }
+        }
+    }
+
+    protected function deleteStoredFile($path): void
+    {
+        if ($this->retainable || !$path || !is_string($path) || URL::isValidUrl($path)) {
+            return;
+        }
+        $this->assertSafePath($path);
+        $storage = $this->storage;
+        $disk = $this->storageDisk;
+        $delete = fn () => $this->cleanupFile($path, $storage, $disk);
+        if (($connection = $this->uploadConnection()) && $connection->transactionLevel() > 0) {
+            $connection->afterCommit($delete);
+        } else {
+            $delete();
+        }
+    }
+
+    protected function deletingUpload(array $input): bool
+    {
+        return Arr::get($input, $this->column) === static::FILE_DELETE_FLAG
+            && array_key_exists(static::FILE_DELETE_FLAG, $input);
+    }
+
+    public function inputShapeErrors(array $input): array
+    {
+        if (!Arr::has($input, $this->column)) {
+            return [];
+        }
+        $value = Arr::get($input, $this->column);
+        if ($this->deletingUpload($input)) {
+            $key = $input[static::FILE_DELETE_FLAG];
+            $valid = is_int($key) || is_string($key);
+            if ($this instanceof MultipleFile) {
+                $original = $this->original();
+                $valid = $valid && array_key_exists($key, $this->pathColumn
+                    ? collect($original)->keyBy($this->getRelatedKeyName())->all() : $original);
+            } else {
+                $valid = $valid && (string) $key === '0';
+            }
+        } elseif ($this instanceof MultipleFile) {
+            if (is_string($value) && Arr::has($input, static::FILE_SORT_FLAG.'.'.$this->column)) {
+                $valid = $this->validFileOrder($value);
+            } else {
+                $valid = is_array($value) && array_is_list($value);
+                foreach ($valid ? $value : [] as $file) {
+                    $valid = $valid && $file instanceof UploadedFile && $file->isValid();
+                }
+            }
+        } else {
+            $valid = $value === null || $value === '' || ($value instanceof UploadedFile && $value->isValid());
+            if ($this->picker && is_string($value)) {
+                $valid = true;
+            }
+        }
+        return $valid ? [] : [$this->column];
     }
 
     /**

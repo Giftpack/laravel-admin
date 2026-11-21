@@ -180,6 +180,8 @@ class Editable extends AbstractDisplayer
 
         $class = 'grid-editable-'.str_replace(['.', '#', '[', ']'], '-', $column);
 
+        $controlClass = 'grid-editable-'.$this->getControlId();
+
         $this->buildEditableOptions(func_get_args());
 
         $options = json_encode($this->options);
@@ -190,19 +192,24 @@ class Editable extends AbstractDisplayer
         if (response.status){
             $.admin.toastr.success(response.message, '', {positionClass:"toast-top-center"});
         } else {
-            $.admin.toastr.error(response.message, '', {positionClass:"toast-top-center"});
+            $.admin.toastr.error(response.message || "__ADMIN_FAILED__", '', {positionClass:"toast-top-center"});
+            return response.message || "__ADMIN_FAILED__";
         }
+    },
+    "error":function(xhr){
+        var response = xhr.responseJSON || {};
+        var errors = response.errors || {};
+        return Object.keys(errors).map(function (name) { return [].concat(errors[name]).join("\n"); }).join("\n") || response.message || "__ADMIN_FAILED__";
     }
 }
 STR;
+        $options = str_replace('"__ADMIN_FAILED__"', json_encode(__('admin.failed')), $options);
 
-        Admin::script("$('.$class').editable($options);");
-
-        $this->value = htmlentities($this->value ?? '');
+        Admin::script("$('.$controlClass').editable($options);");
 
         $attributes = [
             'href'       => '#',
-            'class'      => "$class",
+            'class'      => "$class $controlClass",
             'data-type'  => $this->type,
             'data-pk'    => "{$this->getKey()}",
             'data-url'   => "{$this->getResource()}/{$this->getKey()}",
@@ -214,10 +221,10 @@ STR;
         }
 
         $attributes = collect($attributes)->map(function ($attribute, $name) {
-            return "$name='$attribute'";
+            return $name."=\"".e($attribute)."\"";
         })->implode(' ');
 
-        $html = $this->type === 'select' ? '' : $this->value;
+        $html = $this->type === 'select' ? '' : e($this->value);
 
         return "<a $attributes>{$html}</a>";
     }

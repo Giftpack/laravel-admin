@@ -21,17 +21,20 @@ class LogOperation
     {
         if ($this->shouldLogOperation($request)) {
             $log = [
-                'user_id' => Admin::user()->id,
+                'user_id' => Admin::user()->getAuthIdentifier(),
                 'path'    => substr($request->path(), 0, 255),
                 'method'  => $request->method(),
                 'ip'      => $request->getClientIp(),
-                'input'   => json_encode($request->input()),
+                'input'   => \Encore\Admin\Security\InputRedactor::json($request->input()),
             ];
 
             try {
                 OperationLogModel::create($log);
-            } catch (\Exception $exception) {
-                // pass
+            } catch (\Throwable $exception) {
+                // Best effort by default; do not report exception text/bindings containing input.
+                if (config('admin.operation_log.failure_policy', 'ignore') === 'abort') {
+                    abort(503, 'Operation audit unavailable.');
+                }
             }
         }
 
@@ -80,7 +83,7 @@ class LogOperation
      */
     protected function inExceptArray($request)
     {
-        foreach (config('admin.operation_log.except') as $except) {
+        foreach (config('admin.operation_log.except', []) as $except) {
             if ($except !== '/') {
                 $except = trim($except, '/');
             }
@@ -88,7 +91,7 @@ class LogOperation
             $methods = [];
 
             if (Str::contains($except, ':')) {
-                list($methods, $except) = explode(':', $except);
+                list($methods, $except) = explode(':', $except, 2);
                 $methods = explode(',', $methods);
             }
 

@@ -89,21 +89,28 @@ SCRIPT;
      */
     public function retrieveModel(Request $request)
     {
-        if (!$key = $request->get('_key')) {
-            return false;
-        }
+        $key = $request->input('_key');
 
         $modelClass = str_replace('_', '\\', $request->get('_model'));
 
         if (is_string($key)) {
             $key = explode(',', $key);
+        } elseif (is_int($key)) {
+            $key = [$key];
+        }
+        abort_unless(is_array($key) && $key !== [], 403);
+        foreach ($key as $value) {
+            abort_unless((is_string($value) || is_int($value)) && trim((string) $value) !== '', 403);
         }
 
-        if ($this->modelUseSoftDeletes($modelClass)) {
-            return $modelClass::withTrashed()->findOrFail($key);
-        }
+        // Duplicate selection is harmless but cannot invoke a handler twice for a record.
+        $key = array_values(array_unique(array_map('strval', $key)));
+        abort_if(empty($key), 403);
+        $query = $this->modelUseSoftDeletes($modelClass) ? $modelClass::withTrashed() : $modelClass::query();
+        $models = $query->findOrFail($key);
+        abort_unless($models->count() === count($key), 404);
 
-        return $modelClass::findOrFail($key);
+        return $models;
     }
 
     /**

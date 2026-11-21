@@ -5,7 +5,7 @@ namespace Encore\Admin\Grid\Actions;
 use Encore\Admin\Actions\Response;
 use Encore\Admin\Actions\RowAction;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
+use Encore\Admin\Form;
 
 class Delete extends RowAction
 {
@@ -30,11 +30,25 @@ class Delete extends RowAction
         ];
 
         try {
-            DB::transaction(function () use ($model) {
-                $model->delete();
+            $model->getConnection()->transaction(function () use ($model) {
+                if ($model->delete() === false) {
+                    throw new \RuntimeException('Record deletion was cancelled.');
+                }
+
+                $userModel = config('admin.database.users_model');
+                if (is_string($userModel) && $model instanceof $userModel
+                    && !$this->modelUseSoftDeletes(get_class($model))) {
+                    // Only the built-in administrator avatar is a known upload contract.
+                    $field = (new Form($model))->image('avatar');
+                    $field->setOriginal(['avatar' => $model->getRawOriginal('avatar')]);
+                    $field->destroy();
+                }
             });
-        } catch (\Exception $exception) {
-            return $this->response()->error("{$trans['failed']} : {$exception->getMessage()}");
+        } catch (\Throwable $exception) {
+            $response = $this->response()->error($trans['failed']);
+            $response->status = false;
+
+            return $response;
         }
 
         return $this->response()->success($trans['succeeded'])->refresh();

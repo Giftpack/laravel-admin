@@ -58,7 +58,7 @@ class File extends Field
      */
     public function getValidator(array $input)
     {
-        if (request()->has(static::FILE_DELETE_FLAG)) {
+        if ($this->deletingUpload($input)) {
             return false;
         }
 
@@ -83,11 +83,9 @@ class File extends Field
 
         $rules = $attributes = [];
 
-        if (!$fieldRules = $this->getRules()) {
-            return false;
-        }
+        $fieldRules = $this->getRules();
 
-        $rules[$this->column] = $fieldRules;
+        $rules[$this->column] = $this->picker ? $fieldRules : array_merge(['file'], $fieldRules);
         $attributes[$this->column] = $this->label;
 
         return \validator($input, $rules, $this->getValidationMessages(), $attributes);
@@ -102,12 +100,22 @@ class File extends Field
      */
     public function prepare($file)
     {
+        return $this->prepareUploadSafely(fn () => $this->prepareUpload($file));
+    }
+
+    protected function prepareUpload($file)
+    {
         if ($this->picker) {
             return parent::prepare($file);
         }
 
-        if (request()->has(static::FILE_DELETE_FLAG)) {
-            return $this->destroy();
+        if ($this->deletingUpload(request()->all())) {
+            $this->destroy();
+            return null;
+        }
+
+        if ($file === null || $file === '') {
+            return $this->original();
         }
 
         $this->name = $this->getStoreName($file);
@@ -124,15 +132,7 @@ class File extends Field
      */
     protected function uploadAndDeleteOriginal(UploadedFile $file)
     {
-        $this->renameIfExists($file);
-
-        $path = null;
-
-        if (!is_null($this->storagePermission)) {
-            $path = $this->storage->putFileAs($this->getDirectory(), $file, $this->name, $this->storagePermission);
-        } else {
-            $path = $this->storage->putFileAs($this->getDirectory(), $file, $this->name);
-        }
+        $path = $this->upload($file);
 
         $this->destroy();
 

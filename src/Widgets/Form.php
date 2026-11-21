@@ -204,7 +204,7 @@ class Form implements Renderable
      */
     public function sanitize()
     {
-        foreach (['_form_', '_token'] as $key) {
+        foreach (['_form_', '_token', '_context'] as $key) {
             request()->request->remove($key);
         }
 
@@ -264,7 +264,7 @@ class Form implements Renderable
 
         $html = [];
         foreach ($attributes as $key => $val) {
-            $html[] = "$key=\"$val\"";
+            $html[] = e($key).'="'.e($val).'"';
         }
 
         return implode(' ', $html) ?: '';
@@ -584,6 +584,7 @@ SCRIPT;
             $this->method('POST');
             $this->action(admin_url('_handle_form_'));
             $this->hidden('_form_')->default(get_called_class());
+            $this->hidden('_context')->default(\Encore\Admin\Security\HandlerContext::issue('form', get_class($this)));
         }
     }
 

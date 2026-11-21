@@ -32,7 +32,10 @@ class PublishCommand extends Command
         if ($force == true) {
             $options['--force'] = true;
         }
-        $this->call('vendor:publish', $options);
-        $this->call('view:clear');
+        if ($this->call('vendor:publish', $options) !== self::SUCCESS) {
+            return self::FAILURE;
+        }
+
+        return $this->call('view:clear');
     }
 }

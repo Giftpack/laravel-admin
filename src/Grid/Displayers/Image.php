@@ -22,6 +22,10 @@ class Image extends AbstractDisplayer
                 $src = Storage::disk(config('admin.upload.disk'))->url($path);
             }
 
+            $src = $this->escapeUrl($src, true);
+            $width = (int) $width;
+            $height = (int) $height;
+
             return "<img src='$src' style='max-width:{$width}px;max-height:{$height}px' class='img img-thumbnail' />";
         })->implode('&nbsp;');
     }

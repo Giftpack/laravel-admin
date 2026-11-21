@@ -59,7 +59,7 @@
 </style>
 
 <script>
-$('.column-select-submit').on('click', function () {
+$('.column-select-submit').off('click.adminColumns').on('click.adminColumns', function () {
 
     var defaults = @json($defaults);
     var selected = [];
@@ -83,7 +83,7 @@ $('.column-select-submit').on('click', function () {
     $.pjax({container:'#pjax-container', url: url.toString()});
 });
 
-$('.column-select-all').on('click', function () {
+$('.column-select-all').off('click.adminColumns').on('click.adminColumns', function () {
     $('.column-select-item').iCheck('check');
     return false;
 });

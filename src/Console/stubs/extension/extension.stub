@@ -2,15 +2,16 @@
 
 namespace :namespace;
 
-use Encore\Admin\Extension;
 
-class :class_name extends Extension
+class :class_name extends \Encore\Admin\Extension
 {
     public $name = ':base_package';
 
     public $views = __DIR__.'/../resources/views';
 
     public $assets = __DIR__.'/../resources/assets';
+
+    public $migrations = __DIR__.'/../database/migrations';
 
     public $menu = [
         'title' => ':title',

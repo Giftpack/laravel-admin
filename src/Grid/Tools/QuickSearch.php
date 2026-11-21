@@ -43,7 +43,7 @@ class QuickSearch extends AbstractTool
         $vars = [
             'action'      => request()->url().'?'.http_build_query($query),
             'key'         => HasQuickSearch::$searchKey,
-            'value'       => request(HasQuickSearch::$searchKey),
+            'value'       => is_scalar(request(HasQuickSearch::$searchKey)) ? request(HasQuickSearch::$searchKey) : '',
             'placeholder' => $this->placeholder,
         ];
 

@@ -9,3 +9,8 @@ composer.lock
 .php_cs.cache
 .phpunit.result.cache
 .vscode/
+/tests/browser/node_modules/
+/.playwright-cli/
+/output/playwright/
+/.scratch/
+!/tests/Fixtures/dependencies/**/composer.lock

@@ -22,11 +22,11 @@ class In extends AbstractFilter
     {
         $value = Arr::get($inputs, $this->column);
 
-        if (is_null($value)) {
+        if ($this->ignore || is_null($value) || is_object($value)) {
             return;
         }
 
-        $this->value = (array) $value;
+        $this->value = array_values(array_filter((array) $value, static fn ($item) => is_scalar($item) && $item !== ''));
 
         return $this->buildCondition($this->column, $this->value);
     }

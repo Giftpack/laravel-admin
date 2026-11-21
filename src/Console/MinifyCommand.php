@@ -42,15 +42,17 @@ class MinifyCommand extends Command
      */
     public function handle()
     {
+        if ($this->option('clear')) {
+            $this->clearMinifiedFiles();
+            return self::SUCCESS;
+        }
         if (!class_exists(Minify\Minify::class)) {
             $this->error('To use `admin:minify` command, please install [matthiasmullie/minify] first.');
 
-            return;
+            return self::FAILURE;
         }
 
-        if ($this->option('clear')) {
-            return $this->clearMinifiedFiles();
-        }
+        $this->assets = ['css' => [], 'js' => []];
 
         AdminFacade::bootstrap();
 
@@ -154,7 +156,7 @@ class MinifyCommand extends Command
     protected function generateManifest()
     {
         $min = collect(Admin::$min)->mapWithKeys(function ($path, $type) {
-            return [$type => sprintf('%s?id=%s', $path, md5(uniqid()))];
+            return [$type => sprintf('%s?id=%s', $path, hash_file('sha256', public_path($path)))];
         });
 
         array_unshift($this->assets['css'], $min['css']);

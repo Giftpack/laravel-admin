@@ -12,6 +12,8 @@ class Between extends AbstractFilter
      */
     protected $view = 'admin::filter.between';
 
+    protected $dateRange = false;
+
     /**
      * Format id.
      *
@@ -47,6 +49,10 @@ class Between extends AbstractFilter
             }
         }
 
+        if ($parentName = $this->parent->getName()) {
+            $name = "{$parentName}_{$name}";
+        }
+
         return ['start' => "{$name}[start]", 'end' => "{$name}[end]"];
     }
 
@@ -69,9 +75,25 @@ class Between extends AbstractFilter
 
         $this->value = Arr::get($inputs, $this->column);
 
-        $value = array_filter($this->value, function ($val) {
-            return $val !== '';
+        if (!is_array($this->value)) {
+            $this->value = null;
+            return;
+        }
+
+        $this->query = 'where';
+        $value = array_filter(Arr::only($this->value, ['start', 'end']), function ($val) {
+            return is_scalar($val) && $val !== '';
         });
+
+        $this->value = $value;
+
+        if ($this->dateRange) {
+            foreach ($value as $endpoint) {
+                if (validator(['value' => $endpoint], ['value' => 'date'])->fails()) {
+                    return;
+                }
+            }
+        }
 
         if (empty($value)) {
             return;
@@ -87,7 +109,7 @@ class Between extends AbstractFilter
 
         $this->query = 'whereBetween';
 
-        return $this->buildCondition($this->column, $this->value);
+        return $this->buildCondition($this->column, [$value['start'], $value['end']]);
     }
 
     /**
@@ -98,6 +120,7 @@ class Between extends AbstractFilter
     public function datetime($options = [])
     {
         $this->view = 'admin::filter.betweenDatetime';
+        $this->dateRange = true;
 
         $this->setupDatetime($options);
 

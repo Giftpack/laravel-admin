@@ -10,7 +10,7 @@ class Limit extends AbstractDisplayer
     protected function addScript()
     {
         $script = <<<'JS'
-$('.limit-more').click(function () {
+$('.limit-more').off('click.adminLimit').on('click.adminLimit',function () {
     $(this).parent('.limit-text').toggleClass('hide').siblings().toggleClass('hide');
 });
 JS;
@@ -25,6 +25,9 @@ JS;
         $value = Str::limit($this->value, $limit, $end);
 
         $original = $this->getColumn()->getOriginal();
+
+        $value = $this->displayText($value);
+        $original = $this->displayText($original);
 
         if ($value == $original) {
             return $value;

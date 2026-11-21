@@ -3,7 +3,6 @@
 namespace Encore\Admin\Grid;
 
 use Encore\Admin\Grid;
-use Encore\Admin\Middleware\Pjax;
 use Illuminate\Database\Eloquent\Model as EloquentModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -47,6 +46,17 @@ class Model
      * @var array
      */
     protected $data = [];
+
+    protected $dataBuilt = false;
+
+    protected $sortableColumns = [];
+
+    public function registerSortable($column, $cast = null)
+    {
+        $this->sortableColumns[$column] = $cast;
+
+        return $this;
+    }
 
     /*
      * 20 items per page as default.
@@ -99,7 +109,7 @@ class Model
      * @param EloquentModel $model
      * @param Grid          $grid
      */
-    public function __construct(EloquentModel $model, Grid $grid = null)
+    public function __construct(EloquentModel $model, ?Grid $grid = null)
     {
         $this->model = $model;
 
@@ -279,7 +289,7 @@ class Model
      *
      * @return $this
      */
-    public function collection(\Closure $callback = null)
+    public function collection(?\Closure $callback = null)
     {
         $this->collectionCallback = $callback;
 
@@ -295,12 +305,10 @@ class Model
      */
     public function buildData($toArray = true)
     {
-        if (empty($this->data)) {
+        if (!$this->dataBuilt) {
             $collection = $this->get();
 
-            if ($this->collectionCallback) {
-                $collection = call_user_func($this->collectionCallback, $collection);
-            }
+            $collection = $this->applyCollectionCallback($collection);
 
             if ($toArray) {
                 $this->data = $collection->toArray();
@@ -309,7 +317,15 @@ class Model
             }
         }
 
+        $this->dataBuilt = true;
+
         return $this->data;
+    }
+
+    /** Apply the server-defined collection transformation to a retrieved export/page. */
+    public function applyCollectionCallback($collection)
+    {
+        return $this->collectionCallback ? call_user_func($this->collectionCallback, $collection) : $collection;
     }
 
     /**
@@ -322,6 +338,10 @@ class Model
     {
         if ($this->usePaginate) {
             return $this->buildData(false)->chunk($count)->each($callback);
+        }
+
+        if ($this->relation) {
+            $this->model = clone $this->relation;
         }
 
         $this->setSort();
@@ -373,7 +393,7 @@ class Model
         }
 
         if ($this->relation) {
-            $this->model = $this->relation;
+            $this->model = clone $this->relation;
         }
 
         $this->setSort();
@@ -401,13 +421,9 @@ class Model
      */
     public function getQueryBuilder()
     {
-        if ($this->relation) {
-            return $this->relation->getQuery();
-        }
-
         $this->setSort();
 
-        $queryBuilder = $this->originalModel;
+        $queryBuilder = $this->relation ? clone $this->relation->getQuery() : $this->originalModel;
 
         $this->queries->reject(function ($query) {
             return in_array($query['method'], ['get', 'paginate']);
@@ -432,7 +448,7 @@ class Model
                 $paginator->getPageName() => $paginator->lastPage(),
             ]);
 
-            Pjax::respond(redirect($lastPageUrl));
+            throw new \Illuminate\Http\Exceptions\HttpResponseException(redirect($lastPageUrl));
         }
     }
 
@@ -473,25 +489,23 @@ class Model
      */
     protected function resolvePerPage($paginate)
     {
-        if ($perPage = request($this->perPageName)) {
-            if (is_array($paginate)) {
-                $paginate['arguments'][0] = (int) $perPage;
+        $maximum = max(1, (int) config('admin.grid.max_per_page', 1000), ...array_map('intval', $this->grid?->perPages ?? []));
+        $perPage = filter_var(request($this->perPageName), FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => $maximum],
+        ]);
 
-                return $paginate['arguments'];
-            }
+        $arguments = $paginate['arguments'] ?? [$this->perPage];
+        if ($perPage !== false && $perPage !== null) {
+            $arguments[0] = $perPage;
+        }
+        $this->perPage = $arguments[0];
 
-            $this->perPage = (int) $perPage;
+        if ($name = $this->grid?->getName()) {
+            $arguments[1] ??= ['*'];
+            $arguments[2] ??= "{$name}_page";
         }
 
-        if (isset($paginate['arguments'][0])) {
-            return $paginate['arguments'];
-        }
-
-        if ($name = $this->grid->getName()) {
-            return [$this->perPage, ['*'], "{$name}_page"];
-        }
-
-        return [$this->perPage];
+        return $arguments;
     }
 
     /**
@@ -521,87 +535,91 @@ class Model
         }
 
         $columnName = $this->sort['column'] ?? null;
-        if ($columnName === null || empty($this->sort['type'])) {
+        $direction = $this->sort['type'] ?? null;
+        if (!is_string($columnName)
+            || !array_key_exists($columnName, $this->sortableColumns)
+            || !is_string($direction) || !in_array(strtolower($direction), ['asc', 'desc'], true)) {
+            return;
+        }
+        $this->sort['type'] = strtolower($direction);
+        $relationName = Str::camel(Str::before($columnName, '.'));
+        $hasRelation = $this->queries->contains(function ($query) use ($relationName) {
+            if ($query['method'] !== 'with') {
+                return false;
+            }
+            foreach ($query['arguments'] as $argument) {
+                if ($argument === $relationName || (is_array($argument) && (array_key_exists($relationName, $argument) || in_array($relationName, $argument, true)))) {
+                    return true;
+                }
+            }
+            return false;
+        });
+        if (str_contains($columnName, '.') && $hasRelation) {
+            $this->setRelationSort($columnName);
             return;
         }
 
-        $columnNameContainsDots = Str::contains($columnName, '.');
-        $isRelation = $this->queries->contains(function ($query) use ($columnName) {
-            // relationship should be camel case
-            $columnName = Str::camel(Str::before($columnName, '.'));
-
-            return $query['method'] === 'with' && in_array($columnName, $query['arguments'], true);
-        });
-        if ($columnNameContainsDots === true && $isRelation) {
-            $this->setRelationSort($columnName);
-        } else {
-            $this->resetOrderBy();
-
-            if ($columnNameContainsDots === true) {
-                //json
-                $this->resetOrderBy();
-                $explodedCols = explode('.', $this->sort['column']);
-                $col = array_shift($explodedCols);
-                $parts = implode('.', $explodedCols);
-                $columnName = "JSON_EXTRACT({$col}, '$.{$parts}')";
+        // Let the active grammar compile JSON paths and quote identifiers on each engine.
+        $column = str_replace('.', '->', $columnName);
+        $cast = $this->sortableColumns[$columnName];
+        $expression = null;
+        if ($cast !== null && $cast !== '') {
+            $driver = $this->originalModel->getConnection()->getDriverName();
+            $casts = $driver === 'pgsql'
+                ? ['SIGNED' => 'BIGINT', 'UNSIGNED' => 'BIGINT', 'INTEGER' => 'BIGINT', 'DECIMAL' => 'DECIMAL', 'CHAR' => 'TEXT']
+                : ['SIGNED' => 'SIGNED', 'UNSIGNED' => 'UNSIGNED', 'INTEGER' => 'SIGNED', 'DECIMAL' => 'DECIMAL', 'CHAR' => 'CHAR'];
+            if (!is_string($cast)) {
+                throw new \InvalidArgumentException('Sortable cast must be a SQL type string.');
             }
-
-            // get column. if contains "cast", set set column as cast
-            if (!empty($this->sort['cast'])) {
-                $column = "CAST({$columnName} AS {$this->sort['cast']}) {$this->sort['type']}";
-                $method = 'orderByRaw';
-                $arguments = [$column];
+            $type = strtoupper(trim($cast));
+            if (isset($casts[$type])) {
+                $type = $casts[$type];
+            } elseif (preg_match('/^(DECIMAL|NUMERIC)\(\d{1,2},\d{1,2}\)$/D', $type)) {
+                // MySQL accepts DECIMAL(p,s), but not its NUMERIC alias in CAST.
+                if ($driver === 'mysql') {
+                    $type = preg_replace('/^NUMERIC/', 'DECIMAL', $type);
+                }
+                // Precision and scale are server configuration, never request SQL.
+            } elseif (in_array($type, ['DATE', 'TIME', 'JSON'], true)) {
+                // Shared SQL type names.
+            } elseif ($type === 'DATETIME') {
+                $type = $driver === 'pgsql' ? 'TIMESTAMP' : 'DATETIME';
+            } elseif ($driver === 'pgsql' && in_array($type, ['BIGINT', 'INT', 'TEXT', 'TIMESTAMP', 'BOOLEAN', 'DOUBLE PRECISION'], true)) {
+                // Explicit PostgreSQL server types.
+            } elseif ($driver === 'mysql' && $type === 'BINARY') {
+                // Explicit MySQL server type.
             } else {
-                $column = $columnNameContainsDots ? new Expression($columnName) : $columnName;
-                $method = 'orderBy';
-                $arguments = [$column, $this->sort['type']];
+                throw new \InvalidArgumentException('Unsupported sortable cast for the configured database.');
             }
-
-            $this->queries->push([
-                'method'    => $method,
-                'arguments' => $arguments,
-            ]);
+            $wrapped = $this->originalModel->getConnection()->getQueryGrammar()->wrap($column);
+            $expression = new Expression('CAST('.$wrapped.' AS '.$type.')');
         }
+        $this->resetOrderBy();
+        $this->queries->push(['method' => 'orderBy', 'arguments' => [$expression ?? $column, $this->sort['type']]]);
     }
 
-    /**
-     * Set relation sort.
-     *
-     * @param string $column
-     *
-     * @return void
-     */
+    /** Sort by a scoped scalar subquery, preserving rows without a related model. */
     protected function setRelationSort($column)
     {
-        list($relationName, $relationColumn) = explode('.', $column);
-        // relationship should be camel case
-        $relationName = Str::camel($relationName);
-
-        if ($this->queries->contains(function ($query) use ($relationName) {
-            return $query['method'] == 'with' && in_array($relationName, $query['arguments']);
-        })) {
-            $relation = $this->model->$relationName();
-
-            $this->queries->push([
-                'method'    => 'select',
-                'arguments' => [$this->model->getTable().'.*'],
-            ]);
-
-            $this->queries->push([
-                'method'    => 'join',
-                'arguments' => $this->joinParameters($relation),
-            ]);
-
-            $this->resetOrderBy();
-
-            $this->queries->push([
-                'method'    => 'orderBy',
-                'arguments' => [
-                    $relation->getRelated()->getTable().'.'.$relationColumn,
-                    $this->sort['type'],
-                ],
-            ]);
+        [$name, $attribute] = explode('.', $column, 2);
+        if (str_contains($attribute, '.')) {
+            throw new \InvalidArgumentException('Nested relation sorting is not supported.');
         }
+        $relation = Relation::noConstraints(fn () => $this->originalModel->{Str::camel($name)}());
+        $query = $relation->getQuery();
+        if ($relation instanceof BelongsTo) {
+            $query->whereColumn($relation->getQualifiedOwnerKeyName(), $relation->getQualifiedForeignKeyName());
+        } elseif ($relation instanceof HasOne) {
+            $query->whereColumn($relation->getQualifiedForeignKeyName(), $relation->getQualifiedParentKeyName());
+        } else {
+            throw new \InvalidArgumentException('Related sortable only support `HasOne` and `BelongsTo` relation.');
+        }
+        $query->select($relation->getRelated()->qualifyColumn($attribute))->limit(1);
+        if (empty($query->getQuery()->orders)) {
+            $query->orderBy($relation->getRelated()->getQualifiedKeyName());
+        }
+        $this->resetOrderBy();
+        $this->queries->push(['method' => 'orderBy', 'arguments' => [$query, $this->sort['type']]]);
     }
 
     /**
@@ -612,7 +630,7 @@ class Model
     public function resetOrderBy()
     {
         $this->queries = $this->queries->reject(function ($query) {
-            return $query['method'] == 'orderBy' || $query['method'] == 'orderByDesc';
+            return in_array($query['method'], ['orderBy', 'orderByDesc', 'orderByRaw'], true);
         });
     }
 

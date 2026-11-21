@@ -17,7 +17,9 @@ class BelongsTo extends AbstractDisplayer
         $selectable = str_replace('\\', '_', $selectable);
         $args = [$multiple];
 
-        return route(admin_get_route('handle-selectable'), compact('selectable', 'args'));
+        $_context = \Encore\Admin\Security\HandlerContext::issue('selectable', str_replace('_', '\\', $selectable), ['args' => array_values($args)]);
+
+        return route(admin_get_route('handle-selectable'), compact('selectable', 'args', '_context'));
     }
 
     /**
@@ -43,7 +45,7 @@ class BelongsTo extends AbstractDisplayer
         }
 
         return Admin::component('admin::grid.inline-edit.belongsto', [
-            'modal'     => sprintf('modal-grid-selector-%s', $this->getClassName()),
+            'modal'     => sprintf('modal-grid-selector-%s', $this->getControlId()),
             'key'       => $this->getKey(),
             'original'  => $this->getOriginalData(),
             'value'     => $this->getValue(),

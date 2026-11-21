@@ -2,7 +2,6 @@
 
 namespace Encore\Admin\Console;
 
-use Encore\Admin\Auth\Database\Permission;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,7 +13,7 @@ class PermissionCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'admin:permissions {--tables=}';
+    protected $signature = 'admin:permissions {--tables=} {--connection=} {--schema=}';
 
     /**
      * The console command description.
@@ -40,53 +39,64 @@ class PermissionCommand extends Command
      */
     public function handle()
     {
-        $all_tables = $this->getAllTables();
-
-        $tables = $this->option('tables') ? explode(',', $this->option('tables')) : [];
-        if (empty($tables)) {
-            $ignore_tables = $this->getIgnoreTables();
-            $tables = array_diff($all_tables, $ignore_tables);
-        } else {
-            $tables = array_intersect($all_tables, $tables);
-        }
-
-        if (empty($tables)) {
-            $this->info('table is not existed');
-
-            return;
-        }
-
-        $permissions = $this->getPermissions();
-        foreach ($tables as $table) {
-            foreach ($permissions as $permission => $permission_lang) {
-                $http_method = $this->generateHttpMethod($permission);
-                $http_path = $this->generateHttpPath($table, $permission);
-                $slug = $this->generateSlug($table, $permission);
-                $name = $this->generateName($table, $permission_lang);
-                $exists = Permission::where('slug', $slug)->exists();
-                if (!$exists) {
-                    Permission::create([
-                        'name'        => $name,
-                        'slug'        => $slug,
-                        'http_method' => $http_method,
-                        'http_path'   => $http_path,
-                    ]);
-                    $this->info("$slug is generated");
-                } else {
-                    $this->warn("$slug is existed");
+        try {
+            $connection = DB::connection($this->option('connection') ?: (config('admin.database.connection') ?: null));
+            $schema = $connection->getSchemaBuilder();
+            $schemaName = $this->option('schema') ?: $schema->getCurrentSchemaName();
+            $prefix = $connection->getTablePrefix();
+            $tables = [];
+            foreach ($schema->getTables($schemaName) as $table) {
+                if ($prefix !== '' && !Str::startsWith($table['name'], $prefix)) {
+                    continue;
                 }
+                $tables[] = $prefix === '' ? $table['name'] : substr($table['name'], strlen($prefix));
             }
+            $requested = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('tables'))), 'strlen'));
+            if ($requested && array_diff($requested, $tables)) {
+                $this->error('One or more selected tables do not exist in the selected connection/schema.');
+                return self::FAILURE;
+            }
+            $ignored = array_map(fn ($table) => is_string($table) ? basename(str_replace('.', '/', $table)) : $table, $this->getIgnoreTables());
+            $tables = array_values(array_diff($requested ?: $tables, $ignored));
+            if (!$tables) {
+                $this->info('No eligible tables found.');
+                return self::SUCCESS;
+            }
+            $permissionClass = config('admin.database.permissions_model');
+            $permissionModel = new $permissionClass();
+            $generated = [];
+            $permissionModel->getConnection()->transaction(function () use ($tables, $permissionModel, &$generated) {
+                foreach ($tables as $table) {
+                    foreach ($this->getPermissions() as $permission => $label) {
+                        $slug = $this->generateSlug($table, $permission);
+                        if ($permissionModel->newQuery()->where('slug', $slug)->exists()) {
+                            $this->warn("{$slug} already exists");
+                            continue;
+                        }
+                        $permissionModel->newQuery()->create([
+                            'name' => $this->generateName($table, $label),
+                            'slug' => $slug,
+                            'http_method' => $this->generateHttpMethod($permission),
+                            'http_path' => $this->generateHttpPath($table, $permission),
+                        ]);
+                        $generated[] = $slug;
+                    }
+                }
+            });
+            foreach ($generated as $slug) {
+                $this->info("{$slug} generated");
+            }
+        } catch (\Throwable $exception) {
+            $this->error('Unable to generate permissions for the selected tables.');
+            return self::FAILURE;
         }
-    }
-
-    private function getAllTables()
-    {
-        return array_map('current', DB::select('SHOW TABLES'));
+        return self::SUCCESS;
     }
 
     private function getIgnoreTables()
     {
         return [
+            config('database.migrations.table', 'migrations'),
             config('admin.database.users_table'),
             config('admin.database.roles_table'),
             config('admin.database.permissions_table'),
@@ -146,7 +156,7 @@ class PermissionCommand extends Command
                 $http_path = '/'.$resource.'/*';
                 break;
             default:
-                $http_path = '';
+                $http_path = '/'.$resource;
         }
 
         return $http_path;

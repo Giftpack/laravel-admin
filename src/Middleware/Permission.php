@@ -33,7 +33,7 @@ class Permission
             return $next($request);
         }
 
-        if ($this->checkRoutePermission($request)) {
+        if (Admin::user()->isAdministrator() || $this->checkRoutePermission($request)) {
             return $next($request);
         }
 

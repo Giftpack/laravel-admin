@@ -17,7 +17,7 @@ $('.{{ $trigger }}').popover({
         {{ $content }}
         return $template.prop("outerHTML");
     }
-}).on('shown.bs.popover', function (e) {
+}).off('shown.bs.popover.adminInline').on('shown.bs.popover.adminInline', function (e) {
 
     var $popover = $($(this).data('bs.popover').$tip[0]).find('.ie-content');
     var $display = $(this).parents('.ie-wrap').find('.ie-display');
@@ -28,7 +28,12 @@ $('.{{ $trigger }}').popover({
 
     {{ $shown ?? '' }}
 
-}).click(function () {
+}).off('click.adminInline').on('click.adminInline', function () {
     $('[data-toggle="popover"]').popover('hide');
     $(this).popover('toggle');
+    // Bootstrap 3.3.4 exposes the inserted tip synchronously, before its shown event.
+    // A fast submit must already know its row and display target during the animation.
+    var $popover = $($(this).data('bs.popover').$tip[0]).find('.ie-content');
+    $popover.data('trigger', $(this));
+    $popover.data('display', $(this).parents('.ie-wrap').find('.ie-display'));
 });

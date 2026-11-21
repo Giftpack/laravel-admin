@@ -6,155 +6,51 @@ use Illuminate\Database\Eloquent\Model;
 
 class ResourceGenerator
 {
-    /**
-     * @var Model
-     */
     protected $model;
 
-    /**
-     * @var array
-     */
-    protected $formats = [
-        'form_field'  => "\$form->%s('%s', __('%s'))",
-        'show_field'  => "\$show->field('%s', __('%s'))",
-        'grid_column' => "\$grid->column('%s', __('%s'))",
-    ];
+    protected $columns;
 
-    /**
-     * @var array
-     */
-    private $doctrineTypeMapping = [
-        'string' => [
-            'enum', 'geometry', 'geometrycollection', 'linestring',
-            'polygon', 'multilinestring', 'multipoint', 'multipolygon',
-            'point',
-        ],
-    ];
-
-    /**
-     * @var array
-     */
     protected $fieldTypeMapping = [
-        'ip'       => 'ip',
-        'email'    => 'email|mail',
-        'password' => 'password|pwd',
-        'url'      => 'url|link|src|href',
-        'mobile'   => 'mobile|phone',
-        'color'    => 'color|rgb',
-        'image'    => 'image|img|avatar|pic|picture|cover',
-        'file'     => 'file|attachment',
+        'ip' => 'ip', 'email' => 'email|mail', 'password' => 'password|pwd',
+        'url' => 'url|link|src|href', 'mobile' => 'mobile|phone', 'color' => 'color|rgb',
+        'image' => 'image|img|avatar|pic|picture|cover', 'file' => 'file|attachment',
     ];
 
-    /**
-     * ResourceGenerator constructor.
-     *
-     * @param mixed $model
-     */
     public function __construct($model)
     {
         $this->model = $this->getModel($model);
     }
 
-    /**
-     * @param mixed $model
-     *
-     * @return mixed
-     */
     protected function getModel($model)
     {
         if ($model instanceof Model) {
             return $model;
         }
 
-        if (!class_exists($model) || !is_string($model) || !is_subclass_of($model, Model::class)) {
-            throw new \InvalidArgumentException("Invalid model [$model] !");
+        if (!is_string($model) || !class_exists($model) || !is_subclass_of($model, Model::class)
+            || !(new \ReflectionClass($model))->isInstantiable()) {
+            throw new \InvalidArgumentException('The resource model must be an instantiable Eloquent model class.');
         }
 
         return new $model();
     }
 
-    /**
-     * @return string
-     */
     public function generateForm()
     {
-        $reservedColumns = $this->getReservedColumns();
-
         $output = '';
-
         foreach ($this->getTableColumns() as $column) {
-            $name = $column->getName();
-            if (in_array($name, $reservedColumns)) {
+            if (in_array($column['name'], $this->getReservedColumns(), true)
+                || $column['auto_increment'] || $column['generated']) {
                 continue;
             }
-            $type = $column->getType()->getName();
-            $default = $column->getDefault();
 
-            $defaultValue = '';
-
-            // set column fieldType and defaultValue
-            switch ($type) {
-                case 'boolean':
-                case 'bool':
-                    $fieldType = 'switch';
-                    break;
-                case 'json':
-                case 'array':
-                case 'object':
-                    $fieldType = 'text';
-                    break;
-                case 'string':
-                    $fieldType = 'text';
-                    foreach ($this->fieldTypeMapping as $type => $regex) {
-                        if (preg_match("/^($regex)$/i", $name) !== 0) {
-                            $fieldType = $type;
-                            break;
-                        }
-                    }
-                    $defaultValue = "'{$default}'";
-                    break;
-                case 'integer':
-                case 'bigint':
-                case 'smallint':
-                case 'timestamp':
-                    $fieldType = 'number';
-                    break;
-                case 'decimal':
-                case 'float':
-                case 'real':
-                    $fieldType = 'decimal';
-                    break;
-                case 'datetime':
-                    $fieldType = 'datetime';
-                    $defaultValue = "date('Y-m-d H:i:s')";
-                    break;
-                case 'date':
-                    $fieldType = 'date';
-                    $defaultValue = "date('Y-m-d')";
-                    break;
-                case 'time':
-                    $fieldType = 'time';
-                    $defaultValue = "date('H:i:s')";
-                    break;
-                case 'text':
-                case 'blob':
-                    $fieldType = 'textarea';
-                    break;
-                default:
-                    $fieldType = 'text';
-                    $defaultValue = "'{$default}'";
+            $field = $this->fieldType($column);
+            $output .= sprintf('$form->%s(%s, __(%s))', $field,
+                var_export($column['name'], true), var_export($this->formatLabel($column['name']), true));
+            [$hasDefault, $default] = $this->literalDefault($column);
+            if ($hasDefault) {
+                $output .= '->default('.var_export($default, true).')';
             }
-
-            $defaultValue = $defaultValue ?: $default;
-
-            $label = $this->formatLabel($name);
-
-            $output .= sprintf($this->formats['form_field'], $fieldType, $name, $label);
-
-            if (trim($defaultValue, "'\"")) {
-                $output .= "->default({$defaultValue})";
-            }
-
             $output .= ";\r\n";
         }
 
@@ -163,32 +59,20 @@ class ResourceGenerator
 
     public function generateShow()
     {
-        $output = '';
-
-        foreach ($this->getTableColumns() as $column) {
-            $name = $column->getName();
-
-            // set column label
-            $label = $this->formatLabel($name);
-
-            $output .= sprintf($this->formats['show_field'], $name, $label);
-
-            $output .= ";\r\n";
-        }
-
-        return $output;
+        return $this->generateColumns('$show->field');
     }
 
     public function generateGrid()
     {
+        return $this->generateColumns('$grid->column');
+    }
+
+    protected function generateColumns($method)
+    {
         $output = '';
-
         foreach ($this->getTableColumns() as $column) {
-            $name = $column->getName();
-            $label = $this->formatLabel($name);
-
-            $output .= sprintf($this->formats['grid_column'], $name, $label);
-            $output .= ";\r\n";
+            $output .= sprintf('%s(%s, __(%s));', $method,
+                var_export($column['name'], true), var_export($this->formatLabel($column['name']), true))."\r\n";
         }
 
         return $output;
@@ -196,57 +80,110 @@ class ResourceGenerator
 
     protected function getReservedColumns()
     {
-        return [
-            $this->model->getKeyName(),
-            $this->model->getCreatedAtColumn(),
-            $this->model->getUpdatedAtColumn(),
-            'deleted_at',
-        ];
-    }
-
-    /**
-     * Get columns of a giving model.
-     *
-     * @throws \Exception
-     *
-     * @return \Doctrine\DBAL\Schema\Column[]
-     */
-    protected function getTableColumns()
-    {
-        if (!$this->model->getConnection()->isDoctrineAvailable()) {
-            throw new \Exception(
-                'You need to require doctrine/dbal: ~2.3 in your own composer.json to get database columns. '
-            );
+        $columns = [$this->model->getKeyName(), 'deleted_at'];
+        if ($this->model->usesTimestamps()) {
+            $columns[] = $this->model->getCreatedAtColumn();
+            $columns[] = $this->model->getUpdatedAtColumn();
         }
 
-        $table = $this->model->getConnection()->getTablePrefix().$this->model->getTable();
-        /** @var \Doctrine\DBAL\Schema\MySqlSchemaManager $schema */
-        $schema = $this->model->getConnection()->getDoctrineSchemaManager($table);
+        return $columns;
+    }
 
-        // custom mapping the types that doctrine/dbal does not support
-        $databasePlatform = $schema->getDatabasePlatform();
+    /** Native schema metadata belongs to the model's connection; Builder applies its prefix once. */
+    protected function getTableColumns()
+    {
+        if ($this->columns !== null) {
+            return $this->columns;
+        }
+        $connection = $this->model->getConnection();
+        $columns = $connection->getSchemaBuilder()->getColumns($this->model->getTable());
+        if ($columns === []) {
+            throw new \InvalidArgumentException('The resource model table does not exist or has no visible columns.');
+        }
 
-        foreach ($this->doctrineTypeMapping as $doctrineType => $dbTypes) {
-            foreach ($dbTypes as $dbType) {
-                $databasePlatform->registerDoctrineTypeMapping($dbType, $doctrineType);
+        return $this->columns = array_map(function (array $column) use ($connection) {
+            return [
+                'name' => $column['name'],
+                'type' => strtolower($column['type_name']),
+                'definition' => strtolower($column['type']),
+                'default' => $column['default'],
+                'nullable' => $column['nullable'],
+                'auto_increment' => $column['auto_increment'],
+                'generated' => !empty($column['generation']),
+                'driver' => $connection->getDriverName(),
+            ];
+        }, $columns);
+    }
+
+    protected function fieldType(array $column)
+    {
+        $type = $column['type'];
+        if (in_array($type, ['bool', 'boolean'], true)
+            || ($type === 'tinyint' && preg_match('/^tinyint\(1\)(?: unsigned)?$/', $column['definition']))) {
+            return 'switch';
+        }
+        if (in_array($type, ['tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint', 'int2', 'int4', 'int8', 'serial', 'bigserial'], true)) {
+            return 'number';
+        }
+        if (in_array($type, ['decimal', 'numeric', 'float', 'double', 'float4', 'float8', 'real', 'money'], true)) {
+            return 'decimal';
+        }
+        if (in_array($type, ['datetime', 'timestamp', 'timestamptz'], true)) {
+            return 'datetime';
+        }
+        if ($type === 'date') {
+            return 'date';
+        }
+        if (in_array($type, ['time', 'timetz'], true)) {
+            return 'time';
+        }
+        if (in_array($type, ['text', 'tinytext', 'mediumtext', 'longtext', 'blob', 'tinyblob', 'mediumblob', 'longblob', 'bytea'], true)) {
+            return 'textarea';
+        }
+        if (in_array($type, ['char', 'varchar', 'bpchar', 'character', 'string'], true)) {
+            foreach ($this->fieldTypeMapping as $field => $pattern) {
+                if (preg_match('/^('.$pattern.')$/i', $column['name'])) {
+                    return $field;
+                }
             }
         }
 
-        $database = null;
-        if (strpos($table, '.')) {
-            list($database, $table) = explode('.', $table);
-        }
-
-        return $schema->listTableColumns($table, $database);
+        // JSON, enum, UUID, arrays and unknown/vendor types use a conservative text field.
+        return 'text';
     }
 
-    /**
-     * Format label.
-     *
-     * @param string $value
-     *
-     * @return string
-     */
+    /** Decode SQL literals only. Database expressions remain database-owned, never emitted as PHP. */
+    protected function literalDefault(array $column)
+    {
+        $value = $column['default'];
+        if ($value === null) {
+            return [$column['nullable'], null];
+        }
+        if ($column['driver'] === 'pgsql') {
+            $value = trim((string) $value);
+            if (preg_match("/^'((?:[^']|'')*)'(?:\\s*::[\\w\\s\\[\\].\"]+(?:\\(\\d+(?:,\\d+)?\\))?)?$/s", $value, $match)) {
+                $value = str_replace("''", "'", $match[1]);
+            } elseif (!preg_match('/^(?:true|false|[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$/', $value)) {
+                return [false, null];
+            }
+        } elseif (preg_match('/^\(.*\)$/s', (string) $value)
+            || preg_match('/^[a-z_][a-z_0-9]*\s*\(.*\)$/is', (string) $value)
+            || (in_array($this->fieldType($column), ['datetime', 'date', 'time'], true)
+                && preg_match('/^(?:current_timestamp|current_date|current_time)$/i', (string) $value))) {
+            return [false, null];
+        }
+        if ($this->fieldType($column) === 'switch') {
+            return [true, in_array(strtolower((string) $value), ['1', 'true', 't'], true)];
+        }
+        if ($this->fieldType($column) === 'number' && preg_match('/^[+-]?\d+$/', (string) $value)) {
+            // Keep numbers outside PHP's integer range as strings instead of losing precision.
+            $integer = filter_var($value, FILTER_VALIDATE_INT);
+            return [true, $integer === false ? (string) $value : $integer];
+        }
+
+        return [true, $value];
+    }
+
     protected function formatLabel($value)
     {
         return ucfirst(str_replace(['-', '_'], ' ', $value));

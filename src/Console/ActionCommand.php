@@ -7,6 +7,8 @@ use Illuminate\Support\Str;
 
 class ActionCommand extends GeneratorCommand
 {
+    use ValidatesGeneratedClass;
+
     /**
      * The name and signature of the console command.
      *
@@ -41,12 +43,14 @@ class ActionCommand extends GeneratorCommand
 
         return str_replace(
             [
-                'DummyName',
+                "'DummyName'",
+                "'DummyMarkup'",
                 'DummySelector',
                 'DummyInteractor',
             ],
             [
-                $this->option('name'),
+                var_export((string) $this->option('name'), true),
+                var_export('<a class="btn btn-sm btn-default '.Str::kebab(class_basename($this->argument('name'))).'">'.htmlspecialchars((string) $this->option('name'), ENT_QUOTES, 'UTF-8').'</a>', true),
                 Str::kebab(class_basename($this->argument('name'))),
                 $this->generateInteractor(),
             ],

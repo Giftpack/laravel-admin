@@ -159,29 +159,42 @@ class CsvExporter extends AbstractExporter
 
         $response = function () {
             $handle = fopen('php://output', 'w');
-            $titles = [];
-            fwrite($handle, chr(0xEF).chr(0xBB).chr(0xBF)); //导出的CSV文件是无BOM编码UTF-8，而我们通常使用UTF-8编码格式都是有BOM的。所以添加BOM于CSV中
-            $this->chunk(function ($collection) use ($handle, &$titles) {
-                Column::setOriginalGridModels($collection);
-
-                $original = $current = $collection->toArray();
-
-                $this->grid->getColumns()->map(function (Column $column) use (&$current) {
-                    $current = $column->fill($current);
-                    $this->grid->columnNames[] = $column->getName();
+            if ($handle === false) {
+                throw new \RuntimeException('Unable to open CSV output.');
+            }
+            try {
+                if (fwrite($handle, "\xEF\xBB\xBF") !== 3) {
+                    throw new \RuntimeException('Unable to write CSV BOM.');
+                }
+                $this->grid->columnNames = $this->grid->getColumns()->map->getName()->all();
+                // Empty escape uses standard doubled quotes and round-trips literal backslashes.
+                if (fputcsv($handle, $this->getVisiableTitles(), ',', '"', '') === false) {
+                    throw new \RuntimeException('Unable to write CSV headings.');
+                }
+                $complete = $this->chunk(function ($collection) use ($handle) {
+                    Column::setOriginalGridModels($collection);
+                    $original = $current = $collection->toArray();
+                    $this->grid->getColumns()->each(function (Column $column) use (&$current) {
+                        $current = $column->fill($current);
+                        if (!in_array($column->getName(), $this->grid->columnNames, true)) {
+                            $this->grid->columnNames[] = $column->getName();
+                        }
+                    });
+                    foreach ($current as $index => $record) {
+                        if (fputcsv($handle, $this->getVisiableFields($record, $original[$index]), ',', '"', '') === false) {
+                            throw new \RuntimeException('Unable to write CSV row.');
+                        }
+                    }
                 });
-
-                // Write title
-                if (empty($titles)) {
-                    fputcsv($handle, $titles = $this->getVisiableTitles());
+                if ($complete === false) {
+                    throw new \RuntimeException('CSV export interrupted.');
                 }
-
-                // Write rows
-                foreach ($current as $index => $record) {
-                    fputcsv($handle, $this->getVisiableFields($record, $original[$index]));
+                if (!fflush($handle)) {
+                    throw new \RuntimeException('Unable to flush CSV output.');
                 }
-            });
-            fclose($handle);
+            } finally {
+                fclose($handle);
+            }
         };
 
         response()->stream($response, 200, $this->getHeaders())->send();
@@ -195,6 +208,10 @@ class CsvExporter extends AbstractExporter
     protected function getVisiableTitles()
     {
         $titles = $this->grid->visibleColumns()
+            ->reject(function (Column $column) {
+                return !request(\Encore\Admin\Grid\Tools\ColumnSelector::SELECT_COLUMN_NAME)
+                    && in_array($column->getName(), $this->grid->hiddenColumns, true);
+            })
             ->mapWithKeys(function (Column $column) {
                 $columnName = $column->getName();
                 $columnTitle = $column->getLabel();

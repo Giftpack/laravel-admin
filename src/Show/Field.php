@@ -232,6 +232,10 @@ class Field implements Renderable
                     }
                 }
 
+                $src = e($src);
+                $width = (int) $width;
+                $height = (int) $height;
+
                 return "<img src='$src' style='max-width:{$width}px;max-height:{$height}px' class='img' />";
             })->implode('&nbsp;');
         });
@@ -312,6 +316,8 @@ class Field implements Renderable
                 return '';
             }
 
+            $name = e($name);
+            $url = e($url);
             $download = $download ? "download='$name'" : '';
 
             return <<<HTML
@@ -343,10 +349,18 @@ HTML;
      */
     public function link($href = '', $target = '_blank')
     {
-        return $this->unescape()->as(function ($link) use ($href, $target) {
-            $href = $href ?: $link;
+        $escapeText = $this->escape && $this->showAs->isEmpty();
 
-            return "<a href='$href' target='{$target}'>{$link}</a>";
+        return $this->unescape()->as(function ($link) use ($href, $target, $escapeText) {
+            $href = trim((string) ($href ?: $link));
+            if (preg_match('/^(?:javascript|vbscript|data):/i', preg_replace('/[\x00-\x20]/', '', $href))) {
+                $href = '#';
+            }
+            $href = e($href);
+            $target = e($target);
+            $link = $escapeText ? e($link) : $link;
+
+            return "<a href='$href' target='{$target}' rel='noopener noreferrer'>{$link}</a>";
         });
     }
 
@@ -359,12 +373,17 @@ HTML;
      */
     public function label($style = 'success')
     {
-        return $this->unescape()->as(function ($value) use ($style) {
+        $escapeText = $this->escape && $this->showAs->isEmpty();
+
+        return $this->unescape()->as(function ($value) use ($style, $escapeText) {
             if ($value instanceof Arrayable) {
                 $value = $value->toArray();
             }
 
-            return collect((array) $value)->map(function ($name) use ($style) {
+            return collect((array) $value)->map(function ($name) use ($style, $escapeText) {
+                $name = $escapeText ? e($name) : $name;
+                $style = e($style);
+
                 return "<span class='label label-{$style}'>$name</span>";
             })->implode('&nbsp;');
         });
@@ -379,12 +398,17 @@ HTML;
      */
     public function badge($style = 'blue')
     {
-        return $this->unescape()->as(function ($value) use ($style) {
+        $escapeText = $this->escape && $this->showAs->isEmpty();
+
+        return $this->unescape()->as(function ($value) use ($style, $escapeText) {
             if ($value instanceof Arrayable) {
                 $value = $value->toArray();
             }
 
-            return collect((array) $value)->map(function ($name) use ($style) {
+            return collect((array) $value)->map(function ($name) use ($style, $escapeText) {
+                $name = $escapeText ? e($name) : $name;
+                $style = e($style);
+
                 return "<span class='badge bg-{$style}'>$name</span>";
             })->implode('&nbsp;');
         });
@@ -416,19 +440,21 @@ HTML;
         $field = $this;
 
         return $this->unescape()->as(function ($value) use ($field) {
+            $valid = true;
             if (is_string($value)) {
                 $content = json_decode($value, true);
+                $valid = json_last_error() === JSON_ERROR_NONE;
             } else {
                 $content = $value;
             }
 
-            if (json_last_error() == 0) {
+            if ($valid) {
                 $field->border = false;
 
-                return '<pre><code>'.json_encode($content, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE).'</code></pre>';
+                return '<pre><code>'.e(json_encode($content, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)).'</code></pre>';
             }
 
-            return $value;
+            return e($value);
         });
     }
 
@@ -657,10 +683,9 @@ HTML;
     {
         if ($this->showAs->isNotEmpty()) {
             $this->showAs->each(function ($callable) {
-                $this->value = $callable->call(
-                    $this->parent->getModel(),
-                    $this->value
-                );
+                $this->value = $callable instanceof \Closure && !(new \ReflectionFunction($callable))->isStatic()
+                    ? $callable->call($this->parent->getModel(), $this->value)
+                    : $callable($this->value);
             });
         }
 

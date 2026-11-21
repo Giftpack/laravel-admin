@@ -2,10 +2,8 @@
 
 namespace DummyNamespace;
 
-use Encore\Admin\Widgets\Form;
-use Illuminate\Http\Request;
 
-class DummyClass extends Form
+class DummyClass extends \Encore\Admin\Widgets\Form
 {
     /**
      * The form title.
@@ -21,7 +19,7 @@ class DummyClass extends Form
      *
      * @return \Illuminate\Http\RedirectResponse
      */
-    public function handle(Request $request)
+    public function handle(\Illuminate\Http\Request $request)
     {
         //dump($request->all());
 

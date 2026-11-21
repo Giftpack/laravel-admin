@@ -40,6 +40,16 @@ class OperationLog extends Model
         parent::__construct($attributes);
     }
 
+    public function setInputAttribute($input): void
+    {
+        $this->attributes['input'] = \Encore\Admin\Security\InputRedactor::json($input);
+    }
+
+    public function getInputAttribute($input): string
+    {
+        return \Encore\Admin\Security\InputRedactor::json($input);
+    }
+
     /**
      * Log belongs to users.
      *

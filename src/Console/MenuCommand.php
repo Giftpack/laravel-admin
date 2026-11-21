@@ -30,6 +30,7 @@ class MenuCommand extends Command
     {
         $menu = Admin::menu();
 
-        echo json_encode($menu, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), "\r\n";
+        $this->line(json_encode($menu, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        return self::SUCCESS;
     }
 }

@@ -154,3 +154,15 @@ echo $table->render();
 
 ```
 
+
+
+### PHP 8.5 / Laravel 13 request and step state
+
+Step forms render a session-backed `_step_context` alongside the existing signed widget `_context`. Keep both hidden fields in customized templates. The server restores the rendered step list, current step and continuation URL before building validation rules; changing `_url`, `_current` or `_steps` cannot change approved navigation. `next($data)` remembers the supplied approved data; validation failures leave previous step data intact. Constructor defaults remain available until that step has remembered data.
+
+Workflow data now lives under `admin_steps`, scoped by the server URL and step list. Completion through `clear()` removes only that workflow and its navigation contexts. Other workflows and host session keys, including a host-owned `steps` bag, remain intact. Historical unscoped `steps` data is not automatically migrated; render fresh step forms when upgrading. PHP session serialization remains the default; explicit JSON sessions are supported without migrating consumer sessions.
+
+Admin bootstrap middleware restores request presentation state (scripts, styles, title, navbar and menu) after rendering, including failed requests. Registered extension/bootstrap callbacks and configured base assets remain application registrations. Built-in Show labels/badges/links escape direct stored text; explicit custom callback HTML chains and `unescape()` retain trusted output. URL attributes are escaped independently. Debug-disabled package errors show generic feedback; debug details are escaped. PJAX leaves failed statuses, redirects, JSON, downloads and streamed responses intact. Missing or invalid containers retain the full HTML response for fallback navigation.
+
+
+Workflow identity includes the complete server step-key/form-class map. Different workflows on the same URL can reuse step names safely. Independent copies of an identical definition must supply different stable server IDs as the third `MultipleSteps` constructor or `make()` argument, for example `MultipleSteps::make($steps, $current, 'billing')` and `'shipping'`. Use the same ID on later requests; identity is not request-random or selected by submitted inputs. Direct StepForm builders spanning different classes must call `setWorkflow('stable-server-id')` consistently on all their steps. Identical definitions without distinct IDs intentionally refer to the same workflow, not independent instances.

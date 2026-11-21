@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Role extends Model
 {
     use DefaultDatetimeFormat;
+    use TransactionalGrants;
 
     protected $fillable = ['name', 'slug'];
 
@@ -103,10 +104,12 @@ class Role extends Model
     {
         parent::boot();
 
-        static::deleting(function ($model) {
+        static::deleted(function ($model) {
             $model->administrators()->detach();
 
             $model->permissions()->detach();
+
+            $model->menus()->detach();
         });
     }
 }

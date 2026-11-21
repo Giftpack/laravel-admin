@@ -3,6 +3,7 @@
 namespace Encore\Admin\Grid\Column;
 
 use Carbon\Carbon;
+use Closure;
 use Encore\Admin\Grid\Column;
 use Encore\Admin\Grid\Displayers;
 use Encore\Admin\Grid\Model;
@@ -74,6 +75,9 @@ trait ExtendDisplay
      */
     public static function extend($name, $displayer)
     {
+        if ($displayer instanceof Closure && (new \ReflectionFunction($displayer))->isStatic()) {
+            throw new \InvalidArgumentException('Grid displayer callbacks must be non-static because they are bound to the row model.');
+        }
         static::$displayers[$name] = $displayer;
     }
 

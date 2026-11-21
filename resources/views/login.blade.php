@@ -1,3 +1,4 @@
+@php($username = $username ?? config('admin.auth.username', 'username'))
 <!DOCTYPE html>
 <html>
 <head>
@@ -37,15 +38,15 @@
     <p class="login-box-msg">{{ trans('admin.login') }}</p>
 
     <form action="{{ admin_url('auth/login') }}" method="post">
-      <div class="form-group has-feedback {!! !$errors->has('username') ?: 'has-error' !!}">
+      <div class="form-group has-feedback {!! !$errors->has($username) ?: 'has-error' !!}">
 
-        @if($errors->has('username'))
-          @foreach($errors->get('username') as $message)
+        @if($errors->has($username))
+          @foreach($errors->get($username) as $message)
             <label class="control-label" for="inputError"><i class="fa fa-times-circle-o"></i>{{$message}}</label><br>
           @endforeach
         @endif
 
-        <input type="text" class="form-control" placeholder="{{ trans('admin.username') }}" name="username" value="{{ old('username') }}">
+        <input type="text" class="form-control" placeholder="{{ trans('admin.username') }}" name="{{ $username }}" value="{{ old($username) }}">
         <span class="glyphicon glyphicon-envelope form-control-feedback"></span>
       </div>
       <div class="form-group has-feedback {!! !$errors->has('password') ?: 'has-error' !!}">
@@ -64,7 +65,7 @@
           @if(config('admin.auth.remember'))
           <div class="checkbox icheck">
             <label>
-              <input type="checkbox" name="remember" value="1" {{ (!old('username') || old('remember')) ? 'checked' : '' }}>
+              <input type="checkbox" name="remember" value="1" {{ (!old($username) || old('remember')) ? 'checked' : '' }}>
               {{ trans('admin.remember_me') }}
             </label>
           </div>
@@ -85,7 +86,7 @@
 <!-- /.login-box -->
 
 <!-- jQuery 2.1.4 -->
-<script src="{{ admin_asset("vendor/laravel-admin/AdminLTE/plugins/jQuery/jQuery-2.1.4.min.js")}}"></script>
+<script src="{{ admin_asset("vendor/laravel-admin/AdminLTE/plugins/jQuery/jquery.min.js")}}"></script>
 <!-- Bootstrap 3.3.5 -->
 <script src="{{ admin_asset("vendor/laravel-admin/AdminLTE/bootstrap/js/bootstrap.min.js")}}"></script>
 <!-- iCheck -->

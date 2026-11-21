@@ -52,6 +52,26 @@ trait BelongsToRelation
         return $this->selectable;
     }
 
+    public function getValidator(array $input)
+    {
+        $base = parent::getValidator($input);
+        if (!\Illuminate\Support\Arr::has($input, $this->column)) return $base;
+        $value = \Illuminate\Support\Arr::get($input, $this->column);
+        $ids = array_values(array_filter((array) $value, static fn ($id) => $id !== null && $id !== ''));
+        $validator = $base ?: \validator([], []);
+        $validator->after(function ($validator) use ($ids) {
+            $picker = new $this->selectable();
+            $valid = \Encore\Admin\Security\HandlerContext::authorized($picker);
+            if ($valid && $ids) {
+                $query = $picker->renderFormGrid($ids)->model()->getQueryBuilder();
+                $valid = count($ids) === count(array_unique(array_map('strval', $ids)))
+                    && $query->count() === count($ids);
+            }
+            if (!$valid) $validator->errors()->add($this->column, 'The selected value is unavailable.');
+        });
+        return $validator;
+    }
+
     /**
      * @param int $multiple
      *
@@ -62,7 +82,9 @@ trait BelongsToRelation
         $selectable = str_replace('\\', '_', $this->selectable);
         $args = [$multiple];
 
-        return route(admin_get_route('handle-selectable'), compact('selectable', 'args'));
+        $_context = \Encore\Admin\Security\HandlerContext::issue('selectable', str_replace('_', '\\', $selectable), ['args' => array_values($args)]);
+
+        return route(admin_get_route('handle-selectable'), compact('selectable', 'args', '_context'));
     }
 
     /**
@@ -149,6 +171,8 @@ STYLE;
     {
         /** @var Selectable $selectable */
         $selectable = new $this->selectable();
+
+        abort_unless(\Encore\Admin\Security\HandlerContext::authorized($selectable), 403);
 
         return $selectable->renderFormGrid($this->value());
     }

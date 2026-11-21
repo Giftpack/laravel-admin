@@ -60,6 +60,10 @@ return [
 
         'prefix' => env('ADMIN_ROUTE_PREFIX', 'admin'),
 
+        'domain' => null,
+
+        'name_prefix' => 'admin',
+
         'namespace' => 'App\\Admin\\Controllers',
 
         'middleware' => ['web', 'admin'],
@@ -113,6 +117,8 @@ return [
         'controller' => App\Admin\Controllers\AuthController::class,
 
         'guard' => 'admin',
+
+        'username' => 'username',
 
         'guards' => [
             'admin' => [
@@ -207,9 +213,19 @@ return [
     | By setting this option to open or close operation log in laravel-admin.
     |
     */
+    // Exact handler class => permission slug, for handlers without authorize().
+    // A signed render context is still required; browse grants do not authorize writes.
+    'handler_abilities' => [],
+
     'operation_log' => [
 
         'enable' => true,
+
+        // Built-in credential patterns are always redacted recursively. Add alternate keys here.
+        'sensitive_keys' => [],
+
+        // 'ignore' preserves best-effort logging; 'abort' returns a sanitized 503 before dispatch.
+        'failure_policy' => 'ignore',
 
         /*
          * Only logging allowed methods in the list

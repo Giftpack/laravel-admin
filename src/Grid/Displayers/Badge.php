@@ -18,6 +18,9 @@ class Badge extends AbstractDisplayer
                 $style = Arr::get($style, $this->getColumn()->getOriginal(), 'red');
             }
 
+            $name = $this->displayText($name);
+            $style = e($style);
+
             return "<span class='badge bg-{$style}'>$name</span>";
         })->implode('&nbsp;');
     }

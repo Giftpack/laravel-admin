@@ -119,7 +119,7 @@ SCRIPT;
         }
 
         $this->options = function ($value) use ($model, $idField, $textField) {
-            if (empty($value)) {
+            if ($value === null || $value === '' || $value === []) {
                 return [];
             }
 
@@ -129,7 +129,7 @@ SCRIPT;
                 if (Arr::isAssoc($value)) {
                     $resources[] = Arr::get($value, $idField);
                 } else {
-                    $resources = array_column($value, $idField);
+                    $resources = array_map(static fn ($item) => is_array($item) ? ($item[$idField] ?? null) : $item, $value);
                 }
             } else {
                 $resources[] = $value;
@@ -170,7 +170,7 @@ SCRIPT;
         $ajaxOptions = json_encode(array_merge($ajaxOptions, $options), JSON_UNESCAPED_UNICODE);
 
         $values = (array) $this->filter->getValue();
-        $values = array_filter($values);
+        $values = array_filter($values, static fn ($value) => $value !== null && $value !== '');
         $values = json_encode($values);
 
         $this->script = <<<EOT

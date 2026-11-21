@@ -55,81 +55,42 @@ class Embeds extends Field
     public function getValidator(array $input)
     {
         if (!array_key_exists($this->column, $input)) {
-            return false;
+            return parent::getValidator($input);
         }
 
-        $input = Arr::only($input, $this->column);
-
-        $rules = $attributes = [];
-
-        /** @var Field $field */
-        foreach ($this->buildEmbeddedForm()->fields() as $field) {
-            if (!$fieldRules = $field->getRules()) {
-                continue;
-            }
-
-            $column = $field->column();
-
-            /*
-             *
-             * For single column field format rules to:
-             * [
-             *     'extra.name' => 'required'
-             *     'extra.email' => 'required'
-             * ]
-             *
-             * For multiple column field with rules like 'required':
-             * 'extra' => [
-             *     'start' => 'start_at'
-             *     'end'   => 'end_at',
-             * ]
-             *
-             * format rules to:
-             * [
-             *     'extra.start_atstart' => 'required'
-             *     'extra.end_atend' => 'required'
-             * ]
-             */
-            if (is_array($column)) {
-                foreach ($column as $key => $name) {
-                    $rules["{$this->column}.$name$key"] = $fieldRules;
+        $validator = \validator($input, [$this->column => $this->getRules()]);
+        $validator->after(function ($validator) use ($input) {
+            foreach ($this->buildEmbeddedForm()->fields() as $field) {
+                if ($field->isReadOnly()) continue;
+                if ($nested = $field->getValidator($input[$this->column])) {
+                    foreach ($nested->errors()->messages() as $column => $messages) {
+                        foreach ($messages as $message) $validator->errors()->add("{$this->column}.$column", $message);
+                    }
                 }
-
-                $this->resetInputKey($input, $column);
-            } else {
-                $rules["{$this->column}.$column"] = $fieldRules;
             }
+        });
+        return $validator;
+    }
 
-            /**
-             * For single column field format attributes to:
-             * [
-             *     'extra.name' => $label
-             *     'extra.email' => $label
-             * ].
-             *
-             * For multiple column field with rules like 'required':
-             * 'extra' => [
-             *     'start' => 'start_at'
-             *     'end'   => 'end_at',
-             * ]
-             *
-             * format rules to:
-             * [
-             *     'extra.start_atstart' => "$label[start_at]"
-             *     'extra.end_atend' => "$label[end_at]"
-             * ]
-             */
-            $attributes = array_merge(
-                $attributes,
-                $this->formatValidationAttribute($input, $field->label(), $column)
-            );
+    public function sanitizeOldInput(array $input): array
+    {
+        foreach ($this->buildEmbeddedForm()->fields() as $field) {
+            if ($field instanceof Password) Arr::forget($input, array_map(fn ($column) => "{$this->column}.$column", (array) $field->column()));
+            if (method_exists($field, 'sanitizeOldInput') && isset($input[$this->column])) $input[$this->column] = $field->sanitizeOldInput($input[$this->column]);
         }
+        return $input;
+    }
 
-        if (empty($rules)) {
-            return false;
+    public function inputShapeErrors(array $input): array
+    {
+        if (!array_key_exists($this->column, $input)) return [];
+        if (!is_array($input[$this->column])) return [$this->column];
+        $errors = [];
+        foreach ($this->buildEmbeddedForm()->fields() as $field) {
+            if ($field->isReadOnly()) continue;
+            foreach ($field->inputShapeErrors($input[$this->column]) as $column) $errors[] = "{$this->column}.$column";
         }
-
-        return \validator($input, $rules, $this->getValidationMessages(), $attributes);
+        return $errors;
     }
 
     /**
@@ -209,19 +170,19 @@ class Embeds extends Field
      */
     protected function getEmbeddedData()
     {
-        if ($old = old($this->column)) {
-            return $old;
+        if (session()->hasOldInput($this->column)) {
+            return old($this->column, []);
         }
 
-        if (empty($this->value)) {
+        if (empty($this->value())) {
             return [];
         }
 
-        if (is_string($this->value)) {
-            return json_decode($this->value, true);
+        if (is_string($this->value())) {
+            return json_decode($this->value(), true) ?: [];
         }
 
-        return (array) $this->value;
+        return (array) $this->value();
     }
 
     /**
@@ -240,6 +201,9 @@ class Embeds extends Field
         }
 
         call_user_func($this->builder, $form);
+        if ($this->validationModel) {
+            foreach ($form->fields() as $field) $field->setValidationModel($this->validationModel);
+        }
 
         $form->fill($this->getEmbeddedData());
 

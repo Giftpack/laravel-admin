@@ -65,14 +65,16 @@ class ValuePicker
 
         $args = [$this->multiple, $this->column];
 
-        return route(admin_get_route('handle-selectable'), compact('selectable', 'args'));
+        $_context = \Encore\Admin\Security\HandlerContext::issue('selectable', str_replace('_', '\\', $selectable), ['args' => array_values($args)]);
+
+        return route(admin_get_route('handle-selectable'), compact('selectable', 'args', '_context'));
     }
 
     /**
      * @param Field         $field
      * @param \Closure|null $callback
      */
-    public function mount(Field $field, \Closure $callback = null)
+    public function mount(Field $field, ?\Closure $callback = null)
     {
         $this->field = $field;
         $this->modal = sprintf('picker-modal-%s', $field->getElementClassString());
@@ -94,7 +96,7 @@ class ValuePicker
     /**
      * @param \Closure|null $callback
      */
-    protected function addPickBtn(\Closure $callback = null)
+    protected function addPickBtn(?\Closure $callback = null)
     {
         $text = admin_trans('admin.browse');
 

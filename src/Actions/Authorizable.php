@@ -18,19 +18,27 @@ trait Authorizable
      */
     public function passesAuthorization($model = null)
     {
-        if (method_exists($this, 'authorize')) {
-            return $this->authorize(Admin::user(), $model) == true;
-        }
-
         if ($model instanceof Collection) {
-            $model = $model->first();
+            if ($model->isEmpty()) {
+                return false;
+            }
+            $explicit = method_exists($this, 'authorize');
+            if ($explicit && !\Encore\Admin\Security\HandlerContext::authorizeCallback($this, $model)) {
+                return false;
+            }
+            foreach ($model as $record) {
+                $allowed = $explicit
+                    ? (!method_exists($record, 'actionAuthorize') || $record->actionAuthorize(\Encore\Admin\Facades\Admin::user(), get_class($this)) === true)
+                    : \Encore\Admin\Security\HandlerContext::authorized($this, $record);
+                if (!$allowed) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
-        if ($model && method_exists($model, 'actionAuthorize')) {
-            return $model->actionAuthorize(Admin::user(), get_called_class()) == true;
-        }
-
-        return true;
+        return \Encore\Admin\Security\HandlerContext::authorized($this, $model);
     }
 
     /**

@@ -32,7 +32,7 @@ class Group extends AbstractFilter
      * @param string        $label
      * @param \Closure|null $builder
      */
-    public function __construct($column, $label = '', \Closure $builder = null)
+    public function __construct($column, $label = '', ?\Closure $builder = null)
     {
         $this->column = $column;
 
@@ -164,7 +164,13 @@ class Group extends AbstractFilter
     {
         $label = $label ?: 'Match';
 
-        return $this->equal($label, 'REGEXP');
+        $column = $this->column;
+        $value = (string) $this->value;
+        return $this->joinGroup($label, [function ($query) use ($column, $value) {
+            $connection = $query->getModel()->getConnection();
+            $operator = $connection->getDriverName() === 'pgsql' ? '~' : 'REGEXP';
+            $query->whereRaw($connection->getQueryGrammar()->wrap($column).' '.$operator.' ?', [$value]);
+        }]);
     }
 
     /**
@@ -222,7 +228,11 @@ class Group extends AbstractFilter
      */
     public function ilike($label = '')
     {
-        return $this->like($label, 'ilike');
+        $column = $this->column;
+        $value = '%'.(string) $this->value.'%';
+        return $this->joinGroup($label ?: 'ilike', [function ($query) use ($column, $value) {
+            $query->whereLike($column, $value, false);
+        }]);
     }
 
     /**
@@ -264,13 +274,17 @@ class Group extends AbstractFilter
     {
         $value = Arr::get($inputs, $this->column);
 
-        if (!isset($value)) {
+        if ($this->ignore || !isset($value) || !is_scalar($value)) {
             return;
         }
 
         $this->value = $value;
 
-        $group = Arr::get($inputs, "{$this->id}_group");
+        $group = Arr::get($inputs, "{$this->id}_group", 0);
+        if (!is_scalar($group) || !ctype_digit((string) $group) || !$this->builder) {
+            return;
+        }
+        $this->group = new Collection();
 
         call_user_func($this->builder, $this);
 
@@ -299,12 +313,19 @@ SCRIPT;
      */
     public function variables()
     {
-        $select = request("{$this->id}_group");
+        $prefix = $this->parent->getName();
+        $field = ($prefix ? $prefix.'_' : '').$this->id.'_group';
+        $select = request($field, 0);
+        if (!is_scalar($select) || !ctype_digit((string) $select) || !$this->group->has($select)) {
+            $select = 0;
+        }
 
         $default = $this->group->get($select) ?: $this->group->first();
 
         return array_merge(parent::variables(), [
             'group_name' => $this->name,
+            'group_field' => $field,
+            'group_index' => $select,
             'default'    => $default,
         ]);
     }

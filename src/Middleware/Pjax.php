@@ -5,7 +5,6 @@ namespace Encore\Admin\Middleware;
 use Closure;
 use Encore\Admin\Facades\Admin;
 use Illuminate\Http\Request;
-use Illuminate\Support\MessageBag;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -27,6 +26,15 @@ class Pjax
             return $response;
         }
 
+        // Downloads, streams and JSON retain their original transport and status.
+        if ($response instanceof \Symfony\Component\HttpFoundation\StreamedResponse
+            || $response instanceof \Symfony\Component\HttpFoundation\BinaryFileResponse
+            || !str_contains(strtolower($response->headers->get('Content-Type', '')), 'text/html')) {
+            return $response;
+        }
+
+        // Failed responses belong to the host exception handler. In particular they
+        // need not carry an attached exception, and must not become successful redirects.
         if (!$response->isSuccessful()) {
             return $this->handleErrorResponse($response);
         }
@@ -34,7 +42,8 @@ class Pjax
         try {
             $this->filterResponse($response, $request->header('X-PJAX-CONTAINER'))
                 ->setUriHeader($response, $request);
-        } catch (\Exception $exception) {
+        } catch (\InvalidArgumentException|\Symfony\Component\CssSelector\Exception\ExceptionInterface $exception) {
+            // Invalid/missing selectors retain the complete HTML for PJAX fallback.
         }
 
         return $response;
@@ -61,20 +70,11 @@ class Pjax
      *
      * @param Response $response
      *
-     * @return \Illuminate\Http\RedirectResponse
+     * @return Response
      */
     protected function handleErrorResponse(Response $response)
     {
-        $exception = $response->exception;
-
-        $error = new MessageBag([
-            'type'    => get_class($exception),
-            'message' => $exception->getMessage(),
-            'file'    => $exception->getFile(),
-            'line'    => $exception->getLine(),
-        ]);
-
-        return back()->withInput()->withErrors($error, 'exception');
+        return $response;
     }
 
     /**
@@ -106,7 +106,8 @@ class Pjax
      */
     protected function makeTitle($crawler)
     {
-        $pageTitle = $crawler->filter('head > title')->html();
+        $titles = $crawler->filter('head > title');
+        $pageTitle = $titles->count() ? $titles->html() : '';
 
         return "<title>{$pageTitle}</title>";
     }
@@ -121,10 +122,14 @@ class Pjax
      */
     protected function fetchContents($crawler, $container)
     {
+        if (!is_string($container) || trim($container) === '') {
+            throw new \InvalidArgumentException('Missing PJAX container.');
+        }
+
         $content = $crawler->filter($container);
 
         if (!$content->count()) {
-            abort(422);
+            throw new \InvalidArgumentException('Missing PJAX container.');
         }
 
         return $this->decodeUtf8HtmlEntities($content->html());
@@ -152,7 +157,7 @@ class Pjax
      */
     protected function setUriHeader(Response $response, Request $request)
     {
-        $response->header(
+        $response->headers->set(
             'X-PJAX-URL',
             $request->getRequestUri()
         );

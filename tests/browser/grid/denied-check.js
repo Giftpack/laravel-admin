@@ -1,0 +1,34 @@
+async (page) => {
+const base=new URL('/control/',page.url());
+const csrf=await page.evaluate(()=>jQuery.admin.token);
+await page.request.post(new URL('auth/logout',base).href,{form:{_token:csrf}});
+await page.goto(new URL('auth/login',base).href);
+await page.getByRole('textbox',{name:'admin.username',exact:true}).fill('denied');
+await page.getByRole('textbox',{name:'admin.password',exact:true}).fill('fixture-password');
+await page.getByRole('button',{name:'admin.login',exact:true}).click();
+await page.goto(new URL('records',base).href);
+await page.goto(new URL('legacy-edit',base).href);
+await page.locator('td.column-title a').click();await page.locator('.editable-input input').fill('Denied legacy change');
+const legacy=page.waitForResponse(r=>r.request().method()==='POST' && /records\/1/.test(r.url()));await page.locator('.editable-submit').click();if((await legacy).status()!==403)throw Error('Denied legacy edit accepted');
+await page.locator('.editable-error-block').filter({hasText:/Forbidden|deny|failed/i}).waitFor();
+await page.goto(new URL('records',base).href);
+const before=await (await page.request.get(new URL('fixture-state',base).href)).json();
+await page.locator('td.column-title a').first().click();
+await page.getByRole('tooltip').getByRole('textbox').fill('Unauthorized change');
+let response=page.waitForResponse(r=>r.request().method()==='POST' && /records\/1/.test(r.url()));
+await page.getByRole('tooltip').getByRole('button',{name:'admin.submit',exact:true}).click();
+if((await response).status()!==403)throw Error('Denied inline not rejected');
+await page.locator('.popover .error').filter({hasText:/Forbidden|deny|failed/i}).waitFor();
+await page.getByRole('tooltip').getByRole('button',{name:'admin.cancel',exact:true}).click();
+response=page.waitForResponse(r=>r.url().includes('_handle_selectable_'));await page.locator('.column-owner_id .grid-selector').first().click();if((await response).status()!==403)throw Error('Denied picker not rejected');
+await page.getByRole('dialog').getByText('admin.failed',{exact:true}).waitFor();await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+response=page.waitForResponse(r=>r.url().includes('_handle_renderable_'));await page.locator('.column-detail a').first().click();if((await response).status()!==403)throw Error('Denied modal not rejected');
+await page.getByRole('dialog').getByText('admin.failed',{exact:true}).waitFor();await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+response=page.waitForResponse(r=>r.request().method()==='POST' && /records\/1/.test(r.url()));await page.locator('td.column-file input[type=file]').first().setInputFiles({name:'denied.txt',mimeType:'text/plain',buffer:Buffer.from('denied fixture')});if((await response).status()!==403)throw Error('Denied upload not rejected');
+await page.locator('td.column-file .inline-upload-error').first().filter({hasText:/Forbidden|deny|failed/i}).waitFor();
+const after=await (await page.request.get(new URL('fixture-state',base).href)).json();
+if(JSON.stringify(before.records)!==JSON.stringify(after.records))throw Error('Denied request mutated database');
+if(await page.getByRole('link',{name:'Rename safely',exact:true}).count())throw Error('Denied action visible');
+await page.screenshot({path:'output/playwright/grid-denied.png',fullPage:true});
+return {denied_legacy_edit_403_visible:true,denied_inline_403:true,denied_signed_picker_403:true,denied_signed_detail_403:true,denied_upload_403:true,denied_errors_visible:true,denied_action_hidden:true,database_unchanged:true};
+}

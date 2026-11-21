@@ -48,10 +48,16 @@ class KeyValue extends Field
             return false;
         }
 
-        if (!Arr::has($input, $this->column)) {
+        if (!Arr::has($input, $this->column) && $this->validationModel()?->exists) {
             return false;
         }
 
+        // Item rules alone cannot reject a missing or empty required collection.
+        $presenceRules = array_filter((array) $fieldRules, static fn ($rule) =>
+            is_string($rule) && ($rule === 'required' || str_starts_with($rule, 'required_'))
+        );
+        $rules["{$this->column}.values"] = array_merge(['array'], $presenceRules);
+        $rules["{$this->column}.keys"] = array_merge(['array'], $presenceRules);
         $rules["{$this->column}.keys.*"] = 'distinct';
         $rules["{$this->column}.values.*"] = $fieldRules;
         $attributes["{$this->column}.keys.*"] = __('Key');

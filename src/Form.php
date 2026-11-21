@@ -20,7 +20,6 @@ use Illuminate\Database\Eloquent\Relations;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\MessageBag;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Validator;
@@ -121,7 +120,7 @@ class Form implements Renderable
      * @param $model
      * @param \Closure $callback
      */
-    public function __construct($model, Closure $callback = null)
+    public function __construct($model, ?Closure $callback = null)
     {
         $this->model = $model;
 
@@ -253,24 +252,34 @@ class Form implements Renderable
                 return $ret;
             }
 
-            collect(explode(',', $id))->filter()->each(function ($id) {
-                $builder = $this->model()->newQuery();
+            if ((!is_int($id) && !is_string($id)) || in_array('', explode(',', (string) $id), true)) {
+                throw new \InvalidArgumentException('Invalid record identifier.');
+            }
 
-                if ($this->isSoftDeletes) {
-                    $builder = $builder->withTrashed();
-                }
+            $this->model->getConnection()->transaction(function () use ($id) {
+                collect(explode(',', (string) $id))->filter(static fn ($key) => $key !== '')->each(function ($id) {
+                    $builder = $this->model()->newQuery();
 
-                $model = $builder->with($this->getRelations())->findOrFail($id);
+                    if ($this->isSoftDeletes) {
+                        $builder = $builder->withTrashed();
+                    }
 
-                if ($this->isSoftDeletes && $model->trashed()) {
-                    $this->deleteFiles($model, true);
-                    $model->forceDelete();
+                    $model = $builder->with($this->getRelations())->findOrFail($id);
 
-                    return;
-                }
+                    if ($this->isSoftDeletes && $model->trashed()) {
+                        $this->deleteFiles($model, true);
+                        if ($model->forceDelete() === false) {
+                            throw new \RuntimeException('Record could not be deleted.');
+                        }
 
-                $this->deleteFiles($model);
-                $model->delete();
+                        return;
+                    }
+
+                    $this->deleteFiles($model);
+                    if ($model->delete() === false) {
+                        throw new \RuntimeException('Record could not be deleted.');
+                    }
+                });
             });
 
             if (($ret = $this->callDeleted()) instanceof Response) {
@@ -307,9 +316,13 @@ class Form implements Renderable
         $data = $model->toArray();
 
         $this->fields()->filter(function ($field) {
-            return $field instanceof Field\File;
-        })->each(function (Field\File $file) use ($data) {
-            $file->setOriginal($data);
+            return $field instanceof Field\File || $field instanceof Field\MultipleFile;
+        })->each(function ($file) use ($data, $model) {
+            $original = $data;
+            if ($file instanceof Field\File && is_string($file->column()) && !str_contains($file->column(), '.')) {
+                $original[$file->column()] = $model->getRawOriginal($file->column());
+            }
+            $file->setOriginal($original);
 
             $file->destroy();
         });
@@ -322,6 +335,19 @@ class Form implements Renderable
      */
     public function store()
     {
+        // Tree transport is a separate operation, not a cancelled record insertion.
+        if (\request()->has('_order') && method_exists($this->model, 'saveTreeOrder')) {
+            $order = \request()->input('_order');
+            \request()->offsetUnset('_order');
+            try {
+                (new \Encore\Admin\Tree($this->model))->saveOrder($order);
+            } catch (\InvalidArgumentException $exception) {
+                return response()->json(['status' => false, 'message' => $exception->getMessage()], 422);
+            }
+
+            return response()->json(['status' => true, 'message' => trans('admin.save_succeeded')]);
+        }
+
         $data = \request()->all();
 
         // Handle validation errors.
@@ -333,14 +359,16 @@ class Form implements Renderable
             return $response;
         }
 
-        DB::transaction(function () {
+        $this->model->getConnection()->transaction(function () {
             $inserts = $this->prepareInsert($this->updates);
 
             foreach ($inserts as $column => $value) {
                 $this->model->setAttribute($column, $value);
             }
 
-            $this->model->save();
+            if ($this->model->save() === false) {
+                throw new \RuntimeException('Record could not be saved.');
+            }
 
             $this->updateRelation($this->relations);
         });
@@ -371,7 +399,15 @@ class Form implements Renderable
             ]);
         }
 
-        return back()->withInput()->withErrors($message);
+        $oldInput = request()->except(['password', 'password_confirmation']);
+        foreach ($this->fields() as $field) {
+            // Invalid shapes are useful as errors, never as renderer input on the redirect.
+            $excluded = $field instanceof Field\Password ? (array) $field->column() : $field->inputShapeErrors($oldInput);
+            Arr::forget($oldInput, $excluded);
+            if (method_exists($field, 'sanitizeOldInput')) $oldInput = $field->sanitizeOldInput($oldInput);
+        }
+
+        return back()->withInput($oldInput)->withErrors($message);
     }
 
     /**
@@ -464,6 +500,11 @@ class Form implements Renderable
     protected function removeIgnoredFields($input): array
     {
         Arr::forget($input, $this->ignored);
+        foreach ($this->fields() as $field) {
+            if ($field->isReadOnly()) {
+                Arr::forget($input, (array) $field->column());
+            }
+        }
 
         return $input;
     }
@@ -505,9 +546,12 @@ class Form implements Renderable
      */
     public function update($id, $data = null)
     {
-        $data = ($data) ?: request()->all();
+        $data = $data ?? request()->all();
 
         $isEditable = $this->isEditable($data);
+        if (array_key_exists('_editable', $data) && (!isset($data['name']) || !is_string($data['name']) || !array_key_exists('value', $data))) {
+            return response()->json(['errors' => ['input' => ['Invalid editable input.']]], 422);
+        }
 
         if (($data = $this->handleColumnUpdates($id, $data)) instanceof Response) {
             return $data;
@@ -527,7 +571,7 @@ class Form implements Renderable
         // Handle validation errors.
         if ($validationMessages = $this->validationMessages($data)) {
             if (!$isEditable) {
-                return back()->withInput()->withErrors($validationMessages);
+                return $this->responseValidationError($validationMessages);
             }
 
             return response()->json(['errors' => Arr::dot($validationMessages->getMessages())], 422);
@@ -537,7 +581,7 @@ class Form implements Renderable
             return $response;
         }
 
-        DB::transaction(function () {
+        $this->model->getConnection()->transaction(function () {
             $updates = $this->prepareUpdate($this->updates);
 
             foreach ($updates as $column => $value) {
@@ -545,7 +589,9 @@ class Form implements Renderable
                 $this->model->setAttribute($column, $value);
             }
 
-            $this->model->save();
+            if ($this->model->save() === false) {
+                throw new \RuntimeException('Record could not be saved.');
+            }
 
             $this->updateRelation($this->relations);
         });
@@ -683,7 +729,7 @@ class Form implements Renderable
     protected function handleFileDelete(array $input = []): array
     {
         if (array_key_exists(Field::FILE_DELETE_FLAG, $input)) {
-            $input[Field::FILE_DELETE_FLAG] = $input['key'];
+            $input[Field::FILE_DELETE_FLAG] = $input['key'] ?? null;
             unset($input['key']);
         }
 
@@ -703,7 +749,10 @@ class Form implements Renderable
             return $input;
         }
 
-        $sorts = array_filter($input[Field::FILE_SORT_FLAG]);
+        if (!is_array($input[Field::FILE_SORT_FLAG])) {
+            return $input;
+        }
+        $sorts = array_filter($input[Field::FILE_SORT_FLAG], static fn ($order) => $order !== '' && $order !== null);
 
         if (empty($sorts)) {
             return $input;
@@ -756,6 +805,9 @@ class Form implements Renderable
             }
 
             $relation = $this->model->$name();
+            if ($relation->getRelated()->getConnection() !== $this->model->getConnection()) {
+                throw new \LogicException('Form relationship writes require the parent connection.');
+            }
 
             $oneToOneRelation = $relation instanceof Relations\HasOne
                 || $relation instanceof Relations\MorphOne
@@ -771,7 +823,9 @@ class Form implements Renderable
                 case $relation instanceof Relations\BelongsToMany:
                 case $relation instanceof Relations\MorphToMany:
                     if (isset($prepared[$name])) {
+                        $this->assertRelatedReferences($relation, $prepared[$name]);
                         $relation->sync($prepared[$name]);
+                        $this->assertSyncedReferences($relation, $prepared[$name]);
                     }
                     break;
                 case $relation instanceof Relations\HasOne:
@@ -783,7 +837,9 @@ class Form implements Renderable
                     }
 
                     // save child
-                    $relation->save($related);
+                    if ($relation->save($related) === false) {
+                        throw new \RuntimeException('Related record could not be saved.');
+                    }
                     break;
                 case $relation instanceof Relations\BelongsTo:
                 case $relation instanceof Relations\MorphTo:
@@ -794,10 +850,14 @@ class Form implements Renderable
                     }
 
                     // save parent
-                    $related->save();
+                    if ($related->save() === false) {
+                        throw new \RuntimeException('Related record could not be saved.');
+                    }
 
                     // save child (self)
-                    $relation->associate($related)->save();
+                    if ($relation->associate($related)->save() === false) {
+                        throw new \RuntimeException('Related record could not be saved.');
+                    }
                     break;
                 case $relation instanceof Relations\HasMany:
                 case $relation instanceof Relations\MorphMany:
@@ -808,17 +868,41 @@ class Form implements Renderable
                     $first = Arr::first($data);
 
                     if (is_array($first)) { //relation updated via HasMany field
-                        foreach ($data as $related) {
+                        $seen = [];
+                        foreach ($data as $rowKey => $related) {
                             /** @var Relations\HasOneOrMany $relation */
                             $relation = $this->model->$name();
 
                             $keyName = $relation->getRelated()->getKeyName();
 
                             /** @var Model $child */
-                            $child = $relation->findOrNew(Arr::get($related, $keyName));
+                            $key = Arr::get($related, $keyName);
+                            if (($key === null || $key === '') && !str_starts_with((string) $rowKey, 'new_')) {
+                                $key = $rowKey;
+                                Arr::forget($related, $keyName);
+                            }
+                            if ($key !== null && $key !== '') {
+                                if (isset($seen[(string) $key])) throw new \InvalidArgumentException('Duplicate related record.');
+                                $seen[(string) $key] = true;
+                                $child = $relation->find($key);
+                                if (!$child) {
+                                    if (!str_starts_with((string) $rowKey, 'new_') || $relation->getRelated()->newQuery()->whereKey($key)->exists()) {
+                                        throw new \InvalidArgumentException('Invalid related record.');
+                                    }
+                                    $child = $relation->make();
+                                }
+                            } else {
+                                $child = $relation->make();
+                                // Browser templates submit an empty hidden key; let the database generate it.
+                                if ($child->getIncrementing()) {
+                                    Arr::forget($related, $keyName);
+                                }
+                            }
 
                             if (Arr::get($related, static::REMOVE_FLAG_NAME) == 1) {
-                                $child->delete();
+                                if ($child->exists && $child->delete() === false) {
+                                    throw new \RuntimeException('Related record could not be deleted.');
+                                }
                                 continue;
                             }
 
@@ -826,9 +910,12 @@ class Form implements Renderable
 
                             $child->fill($related);
 
-                            $child->save();
+                            if ($relation->save($child) === false) {
+                                throw new \RuntimeException('Related record could not be saved.');
+                            }
                         }
                     } else { //relation updated via MultipleSelect field
+                        $this->assertRelatedReferences($relation, $data);
                         $foreignKeyName = $relation->getForeignKeyName();
                         $localKeyName = $relation->getLocalKeyName();
 
@@ -837,18 +924,69 @@ class Form implements Renderable
                                 unset($data[$ind]);
                             } else {
                                 $child->$foreignKeyName = null;
-                                $child->save();
+                                if ($child->save() === false) {
+                                throw new \RuntimeException('Related record could not be saved.');
+                            }
                             }
                         }
 
                         foreach ($data as $id) {
                             $child = $relation->getRelated()->find($id);
                             $child->$foreignKeyName = $this->model->$localKeyName;
-                            $child->save();
+                            if ($child->save() === false) {
+                                throw new \RuntimeException('Related record could not be saved.');
+                            }
                         }
                     }
                     break;
             }
+        }
+    }
+
+    /** Eloquent custom pivot events can cancel save without throwing. */
+    protected function assertSyncedReferences($relation, array $data): void
+    {
+        $withAttributes = is_array(Arr::first($data));
+        $expected = array_map('strval', $withAttributes ? array_keys($data) : array_values($data));
+        $rows = $relation->newPivotQuery()->get()->keyBy($relation->getRelatedPivotKeyName());
+        $actual = array_map('strval', $rows->keys()->all());
+        sort($expected);
+        sort($actual);
+        if ($actual !== $expected) {
+            throw new \RuntimeException('Related pivot could not be saved.');
+        }
+        if ($withAttributes) {
+            foreach ($data as $id => $attributes) {
+                $pivot = $relation->newExistingPivot((array) $rows[$id]);
+                $expectedPivot = $relation->newExistingPivot((array) $rows[$id]);
+                $expectedPivot->fill($attributes);
+                foreach ($attributes as $column => $value) {
+                    $stored = $pivot->getAttribute($column);
+                    $expectedValue = $expectedPivot->getAttribute($column);
+                    if (($stored === null) !== ($expectedValue === null) || $stored != $expectedValue) {
+                        throw new \RuntimeException('Related pivot could not be saved.');
+                    }
+                }
+            }
+        }
+    }
+
+    /** Validate the entire replacement before detach/attach mutates existing rows. */
+    protected function assertRelatedReferences($relation, array $data): void
+    {
+        $ids = is_array(Arr::first($data)) ? array_keys($data) : array_values($data);
+        $ids = array_map('strval', $ids);
+        if (count($ids) !== count(array_unique($ids))) {
+            throw new \InvalidArgumentException('Duplicate related record.');
+        }
+        $key = $relation instanceof Relations\BelongsToMany
+            ? $relation->getRelatedKeyName() : $relation->getRelated()->getKeyName();
+        if ($relation->getRelated()->newQuery()->whereIn($key, $ids)->count() !== count($ids)) {
+            throw new \InvalidArgumentException('Invalid related record.');
+        }
+        if ($relation instanceof Relations\HasMany && $relation->getRelated()->newQuery()->whereIn($key, $ids)
+            ->whereNotNull($relation->getForeignKeyName())->where($relation->getForeignKeyName(), '!=', $relation->getParentKey())->exists()) {
+            throw new \InvalidArgumentException('Related record belongs to another parent.');
         }
     }
 
@@ -1033,7 +1171,11 @@ class Form implements Renderable
         $values = $this->model->toArray();
 
         $this->fields()->each(function (Field $field) use ($values) {
-            $field->setOriginal($values);
+            $original = $values;
+            if ($field instanceof Field\File && is_string($field->column()) && !str_contains($field->column(), '.')) {
+                $original[$field->column()] = $this->model->getRawOriginal($field->column());
+            }
+            $field->setOriginal($original);
         });
     }
 
@@ -1126,9 +1268,19 @@ class Form implements Renderable
     public function validationMessages($input)
     {
         $failedValidators = [];
+        $shapeMessages = new MessageBag();
 
         /** @var Field $field */
         foreach ($this->fields() as $field) {
+            if ($field->isReadOnly()) {
+                continue;
+            }
+            if ($shapeErrors = $field->inputShapeErrors($input)) {
+                foreach ($shapeErrors as $column) {
+                    $shapeMessages->add($column, 'The '.$field->label().' field has an invalid value.');
+                }
+                continue;
+            }
             if (!$validator = $field->getValidator($input)) {
                 continue;
             }
@@ -1138,7 +1290,7 @@ class Form implements Renderable
             }
         }
 
-        $message = $this->mergeValidationMessages($failedValidators);
+        $message = $this->mergeValidationMessages($failedValidators)->merge($shapeMessages);
 
         return $message->any() ? $message : false;
     }
@@ -1313,7 +1465,7 @@ class Form implements Renderable
      *
      * @return Form\Tools
      */
-    public function header(Closure $callback = null)
+    public function header(?Closure $callback = null)
     {
         if (func_num_args() === 0) {
             return $this->builder->getTools();
@@ -1423,7 +1575,7 @@ class Form implements Renderable
      *
      * @return \Encore\Admin\Form\Footer
      */
-    public function footer(Closure $callback = null)
+    public function footer(?Closure $callback = null)
     {
         if (func_num_args() === 0) {
             return $this->builder()->getFooter();

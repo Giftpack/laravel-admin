@@ -396,7 +396,7 @@ $form->rate($column[, $label]);
 
 Before use upload field, you must complete upload configuration, see [image/file upload](/en/model-form-upload.md).
 
-You can use compression, crop, add watermarks and other methods, please refer to [[Intervention] (http://image.intervention.io/getting_started/introduction)], picture upload directory in the file `config / admin.php` `Upload.image` configuration, if the directory does not exist, you need to create the directory and open write permissions:
+Plain image uploads do not require Intervention. Transformations and thumbnails use optional `intervention/image:^3.11` with PHP GD; EXIF support enables automatic JPEG orientation. See [upload requirements and file lifetime](/en/model-form-upload.md#image-processing-and-file-lifetime). The image directory is `admin.upload.directory.image` on the configured disk.
 ```php
 $form->image($column[, $label]);
 
@@ -404,10 +404,10 @@ $form->image($column[, $label]);
 $form->image($column[, $label])->move($dir, $name);
 
 // Crop picture
-$form->image($column[, $label])->crop(int $width, int $height, [int $x, int $y]);
+$form->image($column[, $label])->crop(320, 200, 10, 10);
 
 // Add a watermark
-$form->image($column[, $label])->insert($watermark, 'center');
+$form->image($column[, $label])->place($watermark, 'center');
 
 // add delete button
 $form->image($column[, $label])->removable();

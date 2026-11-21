@@ -227,7 +227,16 @@ abstract class Action implements Renderable
      */
     public function getHandleRoute()
     {
-        return admin_url('_handle_action_');
+        $scope = [];
+        if ($this instanceof GridAction) {
+            $scope['model'] = $this->parameters()['_model'];
+        }
+        if ($this instanceof RowAction) {
+            $scope['key'] = (string) $this->getKey();
+        }
+        $token = \Encore\Admin\Security\HandlerContext::issue('action', get_class($this), $scope);
+
+        return admin_url('_handle_action_').'?'.http_build_query(['_context' => $token]);
     }
 
     /**
@@ -263,6 +272,16 @@ abstract class Action implements Renderable
     /**
      * @return mixed
      */
+    public function hasSafeValidationErrors(): bool
+    {
+        return $this->interactor instanceof Interactor\Form && $this->interactor->safeValidationErrors !== [];
+    }
+
+    public function safeValidationErrors(): array
+    {
+        return $this->hasSafeValidationErrors() ? $this->interactor->safeValidationErrors : [];
+    }
+
     protected function addScript()
     {
         if (!is_null($this->interactor)) {

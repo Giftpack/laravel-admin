@@ -6,6 +6,7 @@ use Encore\Admin\Form;
 use Encore\Admin\Grid;
 use Encore\Admin\Show;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends AdminController
 {
@@ -91,21 +92,22 @@ class UserController extends AdminController
 
         $form = new Form(new $userModel());
 
-        $userTable = config('admin.database.users_table');
-        $connection = config('admin.database.connection');
+        $identity = $form->model();
+        $userTable = ($identity->getConnectionName() ? $identity->getConnectionName().'.' : '').$identity->getTable();
 
         $form->display('id', 'ID');
         $form->text('username', trans('admin.username'))
-            ->creationRules(['required', "unique:{$connection}.{$userTable}"])
-            ->updateRules(['required', "unique:{$connection}.{$userTable},username,{{id}}"]);
+            ->creationRules(['required', 'string', Rule::unique($userTable, 'username')])
+            ->updateRules(function (Form $form) use ($userTable) {
+                return ['required', 'string', Rule::unique($userTable, 'username')->ignore($form->model()->getKey(), $form->model()->getKeyName())];
+            });
 
         $form->text('name', trans('admin.name'))->rules('required');
-        $form->image('avatar', trans('admin.avatar'));
-        $form->password('password', trans('admin.password'))->rules('required|confirmed');
-        $form->password('password_confirmation', trans('admin.password_confirmation'))->rules('required')
-            ->default(function ($form) {
-                return $form->model()->password;
-            });
+        $form->image('avatar', trans('admin.avatar'))->removable();
+        $form->password('password', trans('admin.password'))
+            ->creationRules('required|string|confirmed')
+            ->updateRules('nullable|string|confirmed')->customFormat(fn () => '');
+        $form->password('password_confirmation', trans('admin.password_confirmation'));
 
         $form->ignore(['password_confirmation']);
 
@@ -116,7 +118,9 @@ class UserController extends AdminController
         $form->display('updated_at', trans('admin.updated_at'));
 
         $form->saving(function (Form $form) {
-            if ($form->password && $form->model()->password != $form->password) {
+            if ($form->password === null || $form->password === '') {
+                $form->password = $form->model()->getAuthPassword();
+            } else {
                 $form->password = Hash::make($form->password);
             }
         });

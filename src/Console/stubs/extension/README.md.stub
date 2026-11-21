@@ -1,4 +1,27 @@
 laravel-admin extension
-======
+=======================
 
+This scaffold targets PHP ~8.5.13 and encore/laravel-admin ^2.0 (Laravel ^13.40,
+Symfony 7.4). Development tests target PHPUnit ^12.5.8.
 
+Install this package with Composer so Laravel discovers its service provider.
+Its provider loads routes, namespaced views and migrations when enabled, and
+publishes assets under its package tag. Run admin:import to import its declared
+menu and permissions; identical reruns preserve existing rows and grants.
+Conflicting host entries cause a transaction rollback instead of overwriting.
+
+Set admin.extensions.<extension-name>.enable to false before provider boot to
+disable registration. Disablement does not delete published files, database rows,
+grants or registrations already made in the current PHP process. Start a fresh
+application process after changing configuration; refresh cached configuration.
+
+Custom fields/displayers/exporters can be registered after parent::boot() returns
+true. Custom action/widget handlers need their own explicit boolean authorization
+or a configured admin.handler_abilities entry for nonadministrators. Use the
+package's render/context producers and CSRF protected endpoints.
+
+Before adopting the 2.0 candidate, follow the host English/Chinese upgrade guide.
+Keep owned routes/controllers/config/views/translations/assets backed up; merge
+POST+CSRF logout and publish patched assets selectively, refresh signed contexts
+and caches, and rehearse database/upload restore. No external extension is
+certified merely by generating this scaffold. The candidate is unpublished.

@@ -149,19 +149,19 @@ class UserFormTest extends TestCase
         $user = UserModel::with('profile')->find($id);
 
         $this->visit("admin/users/$id/edit")
-            ->seeElement("input[type=text][name=username][value='{$user->username}']")
-            ->seeElement("input[type=email][name=email][value='{$user->email}']")
-            ->seeElement("input[type=text][name=mobile][value='{$user->mobile}']")
+            ->seeInputValue("input[type=text][name=username]", $user->username)
+            ->seeInputValue("input[type=email][name=email]", $user->email)
+            ->seeInputValue("input[type=text][name=mobile]", $user->mobile)
             ->seeElement('hr')
-            ->seeElement("input[type=text][name='profile[first_name]'][value='{$user->profile->first_name}']")
-            ->seeElement("input[type=text][name='profile[last_name]'][value='{$user->profile->last_name}']")
-            ->seeElement("input[type=text][name='profile[postcode]'][value='{$user->profile->postcode}']")
+            ->seeInputValue("input[type=text][name='profile[first_name]']", $user->profile->first_name)
+            ->seeInputValue("input[type=text][name='profile[last_name]']", $user->profile->last_name)
+            ->seeInputValue("input[type=text][name='profile[postcode]']", $user->profile->postcode)
             ->seeInElement("textarea[name='profile[address]']", $user->profile->address)
-            ->seeElement("input[type=hidden][name='profile[latitude]'][value='{$user->profile->latitude}']")
-            ->seeElement("input[type=hidden][name='profile[longitude]'][value='{$user->profile->longitude}']")
-            ->seeElement("input[type=text][name='profile[color]'][value='{$user->profile->color}']")
-            ->seeElement("input[type=text][name='profile[start_at]'][value='{$user->profile->start_at}']")
-            ->seeElement("input[type=text][name='profile[end_at]'][value='{$user->profile->end_at}']")
+            ->seeInputValue("input[type=hidden][name='profile[latitude]']", $user->profile->latitude)
+            ->seeInputValue("input[type=hidden][name='profile[longitude]']", $user->profile->longitude)
+            ->seeInputValue("input[type=text][name='profile[color]']", $user->profile->color)
+            ->seeInputValue("input[type=text][name='profile[start_at]']", $user->profile->start_at)
+            ->seeInputValue("input[type=text][name='profile[end_at]']", $user->profile->end_at)
             ->seeElement("select[name='tags[]'][multiple]");
 
         $this->assertCount(11, $this->crawler()->filter("select[name='tags[]'] option"));

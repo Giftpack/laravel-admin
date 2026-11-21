@@ -1,0 +1,37 @@
+async (page) => {
+await page.reload();
+let state=await (await page.request.get(new URL('/control/fixture-state',page.url()).href)).json();const initial=state.records.length;const initialActive=state.records.find(r=>r.id===1).active;
+await page.locator('.quick-create .create').click();
+await page.locator('.quick-create input[name=title]').fill('x');
+let response=page.waitForResponse(r=>r.request().method()==='POST' && /\/records$/.test(r.url()));
+await page.locator('.quick-create button').click();const invalid=await response;if(invalid.status()!==200 || !(await invalid.json()).validation)throw Error('Quick create validation');
+if(!await page.locator('.quick-create button').isEnabled())throw Error('Quick create not reset');
+await page.locator('.quick-create input[name=title]').fill('Quick created');
+await page.locator('.quick-create input[name=note]').fill('Quick note');
+response=page.waitForResponse(r=>r.request().method()==='POST' && /\/records$/.test(r.url()));
+await page.locator('.quick-create button').click();if(!(await (await response).json()).status)throw Error('Quick create save');
+await page.locator('.quick-create .create').waitFor();
+state=await (await page.request.get(new URL('/control/fixture-state',page.url()).href)).json();if(state.records.length!==initial+1||!state.records.some(r=>r.title==='Quick created'&&r.note==='Quick note'))throw Error('Quick create database');
+await page.locator('.column-active .bootstrap-switch-handle-'+(initialActive?'on':'off')).first().click();
+await page.reload();state=await (await page.request.get(new URL('/control/fixture-state',page.url()).href)).json();if(state.records.find(r=>r.id===1).active!==(initialActive?0:1))throw Error('Switch persistence');
+await page.locator('.grid-dropdown-actions .dropdown-toggle').first().click();
+response=page.waitForResponse(r=>r.url().includes('_handle_action_')&&r.request().method()==='POST');
+await page.getByRole('link',{name:'Failure',exact:true}).click();const failed=await (await response).json();if(failed.status!==false||JSON.stringify(failed).includes('synthetic-private-handler-value'))throw Error('Unsafe failure');
+await page.locator('.column-selector button.dropdown-toggle').click();
+await page.locator('.column-select-item[value=note]').locator('..').click();
+response=page.waitForResponse(r=>r.url().includes('_columns_')&&r.request().method()==='GET');
+await page.locator('.column-select-submit').click();await response;await page.locator('th.column-note').waitFor({state:'detached'});
+await page.locator('.column-selector button.dropdown-toggle').click();await page.locator('.column-select-all').click();
+response=page.waitForResponse(r=>r.request().headers()['x-pjax']==='true');await page.locator('.column-select-submit').click();await response;await page.locator('th.column-note').waitFor();
+await page.evaluate(()=>{window.hostKeydowns=0;jQuery(document).on('keydown.gridHost',()=>window.hostKeydowns++);});
+await page.getByRole('heading',{name:'Grid interaction fixture'}).click();await page.keyboard.press('s');
+if(!await page.locator('input.grid-quick-search').evaluate(e=>e===document.activeElement))throw Error('Search hotkey');
+if(await page.evaluate(()=>window.hostKeydowns)<1)throw Error('Host key handler removed');
+await page.getByRole('heading',{name:'Grid interaction fixture'}).click();response=page.waitForResponse(r=>r.request().headers()['x-pjax']==='true');await page.keyboard.press('r');await response;await page.waitForFunction(()=>jQuery.active===0);
+await page.locator('.grid-table tbody tr').first().locator('input[type=checkbox]').first().locator('..').click();
+if((await page.evaluate(()=>jQuery.admin.grid.selected())).join()!=='1')throw Error('Select first row: '+JSON.stringify(await page.evaluate(()=>jQuery.admin.grid.selected())));
+response=page.waitForResponse(r=>r.url().includes('page=2'));await page.getByRole('link',{name:'2',exact:true}).click();await response;await page.getByRole('link',{name:'Fourth',exact:true}).waitFor();
+if((await page.evaluate(()=>jQuery.admin.grid.selected())).length!==0)throw Error('Page selection not reset');
+await page.screenshot({path:'output/playwright/grid-grid-tools.png',fullPage:true});
+return {quick_create_invalid_corrected_saved:true,switch_saved:true,row_failure_sanitized:true,column_selector_hide_restore:true,hotkeys_preserve_host_handlers:true,refresh_pjax:true,page_selection_reset:true};
+}

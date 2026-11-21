@@ -1,0 +1,5 @@
+services:
+  application:
+    ports:
+      - "127.0.0.1::8000"
+    command: ["sh", "-c", "php /application/scripts/grid-browser.php --seed && test -f /tmp/laravel-admin-grid-browser/.seed-complete && exec php -S 0.0.0.0:8000 -t /tmp/laravel-admin-grid-browser/public /application/scripts/grid-browser.php"]

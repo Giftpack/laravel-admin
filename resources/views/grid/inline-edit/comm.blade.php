@@ -3,7 +3,7 @@
 <span class="ie-wrap">
     <a
         href="javascript:void(0);"
-        class="{{ $trigger }}"
+        class="{{ $legacyTrigger ?? '' }} {{ $trigger }}"
         data-toggle="popover"
         data-target="{{ $target }}"
         data-value="{{ $value }}"
@@ -19,7 +19,7 @@
 
 <template>
     <template id="{{ $target }}">
-        <div class="ie-content ie-content-{{ $name }}">
+        <div class="ie-content ie-content-{{ $trigger }}">
             <div class="ie-container">
                 @yield('field')
                 <div class="error"></div>
@@ -66,11 +66,11 @@
 </style>
 
 <script>
-    $(document).on('click', '.ie-action .ie-cancel', function () {
+    $(document).off('click.adminInlineCancel', '.ie-action .ie-cancel').on('click.adminInlineCancel', '.ie-action .ie-cancel', function () {
         $('[data-toggle="popover"]').popover('hide');
     });
 
-    $('body').on('click', function (e) {
+    $('body').off('click.adminInlineDismiss').on('click.adminInlineDismiss', function (e) {
         if ($(e.target).data('toggle') !== 'popover'
             && $(e.target).parents('[data-toggle="popover"]').length === 0
             && $(e.target).parents('.popover.in').length === 0) {

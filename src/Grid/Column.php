@@ -364,6 +364,8 @@ class Column
         return $this->addSorter($cast);
     }
 
+    protected $sortCast;
+
     /**
      * Set cast name for sortable.
      *
@@ -373,7 +375,8 @@ class Column
      */
     public function cast($cast)
     {
-        $this->cast = $cast;
+        $this->sortCast = $cast;
+        $this->grid->model()->registerSortable($this->getName(), $cast);
 
         return $this;
     }
@@ -411,6 +414,10 @@ class Column
      */
     public function display(Closure $callback)
     {
+        if ((new \ReflectionFunction($callback))->isStatic()) {
+            throw new \InvalidArgumentException('Grid display callbacks must be non-static because they are bound to the row model.');
+        }
+
         $this->displayCallbacks[] = $callback;
 
         return $this;
@@ -694,12 +701,13 @@ class Column
         if (class_exists($abstract) && is_subclass_of($abstract, AbstractDisplayer::class)) {
             $grid = $this->grid;
             $column = $this;
+            $escapeText = !$this->hasDisplayCallbacks();
 
-            return $this->display(function ($value) use ($abstract, $grid, $column, $arguments) {
+            return $this->display(function ($value) use ($abstract, $grid, $column, $arguments, $escapeText) {
                 /** @var AbstractDisplayer $displayer */
                 $displayer = new $abstract($value, $grid, $column, $this);
 
-                return $displayer->display(...$arguments);
+                return $displayer->escapeText($escapeText)->display(...$arguments);
             });
         }
 

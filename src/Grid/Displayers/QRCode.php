@@ -32,6 +32,10 @@ SCRIPT;
             $content = call_user_func($formatter, $content, $this->row);
         }
 
+        $content = rawurlencode($content ?? '');
+        $width = max(1, (int) $width);
+        $height = max(1, (int) $height);
+        $value = $this->displayText($this->getValue());
         $img = sprintf(
             "<img src='https://api.qrserver.com/v1/create-qr-code/?size=%sx%s&data=%s' style='height:%spx;width:%spx;'/>",
             $width,
@@ -41,10 +45,12 @@ SCRIPT;
             $width
         );
 
+        $img = e($img);
+
         return <<<HTML
 <a href="javascript:void(0);" class="grid-column-qrcode text-muted" data-content="{$img}" data-toggle='popover' tabindex='0'>
     <i class="fa fa-qrcode"></i>
-</a>&nbsp;{$this->getValue()}
+</a>&nbsp;{$value}
 HTML;
     }
 }

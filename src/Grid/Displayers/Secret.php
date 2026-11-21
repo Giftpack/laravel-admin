@@ -11,13 +11,14 @@ class Secret extends AbstractDisplayer
         $this->addScript();
 
         $dots = str_repeat('*', $dotCount);
+        $value = $this->displayText($this->getValue());
 
         return <<<HTML
 <span class="secret-wrapper">
     <i class="fa fa-eye" style="cursor: pointer;"></i>
     &nbsp;
     <span class="secret-placeholder" style="vertical-align: middle;">{$dots}</span>
-    <span class="secret-content" style="display: none;">{$this->getValue()}</span>
+    <span class="secret-content" style="display: none;">{$value}</span>
 </span>
 HTML;
     }
@@ -25,7 +26,7 @@ HTML;
     protected function addScript()
     {
         $script = <<<'SCRIPT'
-$('.secret-wrapper i').click(function () {
+$('.secret-wrapper i').off('click.adminSecret').on('click.adminSecret',function () {
     $(this).toggleClass('fa-eye fa-eye-slash').parent().find('.secret-placeholder,.secret-content').toggle();
 });
 SCRIPT;

@@ -16,12 +16,14 @@ abstract class AbstractExporter implements ExporterInterface
      */
     protected $page;
 
+    protected $queryPrepared = false;
+
     /**
      * Create a new exporter instance.
      *
      * @param $grid
      */
-    public function __construct(Grid $grid = null)
+    public function __construct(?Grid $grid = null)
     {
         if ($grid) {
             $this->setGrid($grid);
@@ -61,7 +63,9 @@ abstract class AbstractExporter implements ExporterInterface
      */
     public function getData($toArray = true)
     {
-        return $this->grid->getFilter()->execute($toArray);
+        $data = $this->grid->model()->applyCollectionCallback($this->getQuery()->get());
+
+        return $toArray ? $data->toArray() : $data;
     }
 
     /**
@@ -72,9 +76,18 @@ abstract class AbstractExporter implements ExporterInterface
      */
     public function chunk(callable $callback, $count = 100)
     {
-        $this->grid->applyQuery();
+        // Current-page exports historically apply the whole-page collection callback.
+        if ($this->page) {
+            foreach ($this->getData(false)->chunk($count) as $collection) {
+                if ($callback($collection) === false) {
+                    return false;
+                }
+            }
 
-        return $this->grid->getFilter()->chunk($callback, $count);
+            return true;
+        }
+
+        return $this->getQuery()->chunk($count, $callback);
     }
 
     /**
@@ -91,20 +104,32 @@ abstract class AbstractExporter implements ExporterInterface
     public function getQuery()
     {
         $model = $this->grid->getFilter()->getModel();
+        if (!$this->queryPrepared) {
+            $this->grid->applyQuery();
+            $filter = $this->grid->getFilter();
+            $filter->getExportQuery();
+            $this->queryPrepared = true;
+        }
 
-        $queryBuilder = $model->getQueryBuilder();
+        $queryBuilder = clone $model->getQueryBuilder();
+        if ($queryBuilder instanceof \Illuminate\Database\Eloquent\Model) {
+            $queryBuilder = $queryBuilder->newQuery();
+        }
+        $queryBuilder->orderBy($model->getOriginalModel()->qualifyColumn($this->grid->getKeyName()));
 
-        // Export data of giving page number.
+        // Restrict the already filtered/scoped query, without leaking page offsets into chunking.
         if ($this->page) {
-            $keyName = $this->grid->getKeyName();
-            $perPage = request($model->getPerPageName(), $model->getPerPage());
-
-            $scope = (clone $queryBuilder)
-                ->select([$keyName])
-                ->setEagerLoads([])
+            $keyName = $model->getOriginalModel()->qualifyColumn($this->grid->getKeyName());
+            $maximum = max(1, (int) config('admin.grid.max_per_page', 1000), ...array_map('intval', $this->grid->perPages));
+            $perPage = filter_var(request($model->getPerPageName()), FILTER_VALIDATE_INT, [
+                'options' => ['min_range' => 1, 'max_range' => $maximum],
+            ]) ?: $model->getPerPage();
+            if ($this->page > intdiv(PHP_INT_MAX, max(1, (int) $perPage))) {
+                abort(422, 'Invalid export page.');
+            }
+            $scope = (clone $queryBuilder)->select([$keyName])->setEagerLoads([])
                 ->forPage($this->page, $perPage)->get();
-            // If $querybuilder is a Model, it must be reassigned, unless it is a eloquent/query builder.
-            $queryBuilder = $queryBuilder->whereIn($keyName, $scope->pluck($keyName));
+            $queryBuilder->whereIn($keyName, $scope->modelKeys());
         }
 
         return $queryBuilder;
@@ -119,19 +144,25 @@ abstract class AbstractExporter implements ExporterInterface
      */
     public function withScope($scope)
     {
-        if ($scope == Grid\Exporter::SCOPE_ALL) {
+        if ($scope === Grid\Exporter::SCOPE_ALL) {
             return $this;
         }
 
-        list($scope, $args) = explode(':', $scope);
-
-        if ($scope == Grid\Exporter::SCOPE_CURRENT_PAGE) {
-            $this->grid->model()->usePaginate(true);
-            $this->page = $args ?: 1;
+        if (!is_string($scope) || !preg_match('/^(page|selected):(.+)$/D', $scope, $matches)) {
+            abort(422, 'Invalid export scope.');
         }
-
-        if ($scope == Grid\Exporter::SCOPE_SELECTED_ROWS) {
+        [, $scope, $args] = $matches;
+        if ($scope === Grid\Exporter::SCOPE_CURRENT_PAGE) {
+            $page = filter_var($args, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($page === false) {
+                abort(422, 'Invalid export page.');
+            }
+            $this->page = $page;
+        } else {
             $selected = explode(',', $args);
+            if (in_array('', $selected, true)) {
+                abort(422, 'Invalid export selection.');
+            }
             $this->grid->model()->whereIn($this->grid->getKeyName(), $selected);
         }
 

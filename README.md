@@ -14,9 +14,6 @@
 </p>
 
 <p align="center">
-    <a href="https://travis-ci.org/z-song/laravel-admin">
-        <img src="https://travis-ci.org/z-song/laravel-admin.svg?branch=master" alt="Build Status">
-    </a>
     <a href="https://styleci.io/repos/48796179">
         <img src="https://styleci.io/repos/48796179/shield" alt="StyleCI">
     </a>
@@ -49,36 +46,17 @@ Sponsor
 </a>
 
 
-Requirements
+Requirements and candidate status
 ------------
- - PHP >= 7.0.0
- - Laravel >= 5.5.0
- - Fileinfo PHP Extension
+This unpublished 2.0 candidate targets PHP `~8.5.13`, Laravel `^13.40` and the Symfony 7.4 component floors in composer.json. Executed versions: PHP8.5.13, Laravel13.40.0/13.43.0, PostgreSQL15.14/MySQL8.4.13. No other framework/Symfony/database line is certified. Fileinfo, mbstring, DOM/XML and the chosen PDO driver are required; image transforms and XLSX need their optional packages/extensions.
 
-Installation
+Installation and existing-host upgrade
 ------------
+Follow [English installation](docs/en/installation.md) / [中文安裝](docs/zh/installation.md). The candidate has not been tagged or published; `^2.0` examples apply after approved publication, and local review uses a path repository. Fresh installs publish config, migrations, assets and languages before `admin:install`.
 
-> This package requires PHP 7+ and Laravel 5.5, for old versions please refer to [1.4](https://laravel-admin.org/docs/v1.4/#/)
+Existing Laravel12 hosts must follow [English upgrade and rollback](docs/en/upgrade.md) / [中文升級與回復](docs/zh/upgrade.md). Preserve IDs/data/customizations; do not regenerate/reseed existing installations. Mandatory migrations include POST+CSRF logout, signed generic handler contexts with explicit policies, selective hash-aware asset publication including the new jQuery path, and cache/CDN invalidation. Custom Excel4 subclasses and CSV consumers need the documented API/wire changes. Same-install PHP8.4.28/Laravel12.25→PHP8.5.13/Laravel13.43 and actual backup rollback are rehearsed on both engines.
 
-First, install laravel 5.5, and make sure that the database connection settings are correct.
-
-```
-composer require encore/laravel-admin
-```
-
-Then run these commands to publish assets and config：
-
-```
-php artisan vendor:publish --provider="Encore\Admin\AdminServiceProvider"
-```
-After run command you can find config file in `config/admin.php`, in this file you can change the install directory,db connection or table names.
-
-At last run following command to finish install.
-```
-php artisan admin:install
-```
-
-Open `http://localhost/admin/` in browser,use username `admin` and password `admin` to login.
+Optional tested packages: Intervention Image3.11.0/3.11.10, Excel4.0.7/PhpSpreadsheet5.11.0, MewsCaptcha3.5.1, SpatieSortable5.0.1 and Minify1.3.76. Development BrowserKit7.3/PHPUnit12.5/Mockery1.6.15 are separate from runtime requirements. See [development test instructions](tests/README.md) and [changelog](CHANGELOG.md). Reusable local commands cover current/minimum dependencies on both database engines; no GitHub Actions workflow is included.
 
 Configurations
 ------------
@@ -86,11 +64,11 @@ The file `config/admin.php` contains an array of configurations, you can find th
 
 Right to left support
 ------------
-just go to this path `<YOUR_PROJECT_PATH>\vendor\encore\laravel-admin\src\Traits\HasAssets.php` and modify `$baseCss` array for loading right to left (rtl) version of bootstap and AdminLTE css files.    
-**bootstrap.min.css** change it to **bootstrap.rtl.min.css**    
-**AdminLTE.min.css** change it to **AdminLTE.rtl.min.css**  
+Configure the base CSS list in the host admin bootstrap with `Admin::baseCss(...)`, replacing the Bootstrap and AdminLTE entries with their distributed RTL variants. Keep the remaining configured styles and host overrides, and generate/publish the matching RTL minified bundle when used. The tested Arabic RTL path retains local fonts; see [upgrade instructions](docs/en/upgrade.md).
 
 ## Extensions
+
+The following is a historical third-party catalog, with its original compatibility labels. These external extensions have **not** been certified for this candidate; each requires an explicit consumer compatibility review. Live cloud providers and historical MongoDB integration are likewise unresolved prerequisites.
 
 | Extension                                        | Description                              | laravel-admin                              |
 | ------------------------------------------------ | ---------------------------------------- |---------------------------------------- |

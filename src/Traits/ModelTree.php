@@ -5,7 +5,6 @@ namespace Encore\Admin\Traits;
 use Encore\Admin\Tree;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request;
 
 trait ModelTree
@@ -120,7 +119,7 @@ trait ModelTree
      *
      * @return $this
      */
-    public function withQuery(\Closure $query = null)
+    public function withQuery(?\Closure $query = null)
     {
         $this->queryCallback = $query;
 
@@ -175,10 +174,10 @@ trait ModelTree
      */
     public function allNodes()
     {
-        $orderColumn = DB::getQueryGrammar()->wrap($this->orderColumn);
+        $orderColumn = $this->getConnection()->getQueryGrammar()->wrap($this->orderColumn);
         $byOrder = $orderColumn.' = 0,'.$orderColumn;
 
-        $self = new static();
+        $self = clone $this;
 
         if ($this->queryCallback instanceof \Closure) {
             $self = call_user_func($this->queryCallback, $self);
@@ -211,21 +210,78 @@ trait ModelTree
      */
     public static function saveOrder($tree = [], $parentId = 0)
     {
-        if (empty(static::$branchOrder)) {
-            static::setBranchOrder($tree);
-        }
+        (new static())->saveTreeOrder($tree, $parentId);
+    }
 
-        foreach ($tree as $branch) {
-            $node = static::find($branch['id']);
-
-            $node->{$node->getParentColumn()} = $parentId;
-            $node->{$node->getOrderColumn()} = static::$branchOrder[$branch['id']];
-            $node->save();
-
-            if (isset($branch['children'])) {
-                static::saveOrder($branch['children'], $branch['id']);
+    /**
+     * Validate the entire proposal before writing on this model's connection.
+     * Static saveOrder remains available for existing callers.
+     */
+    public function saveTreeOrder($tree = [], $parentId = 0)
+    {
+        $proposal = [];
+        $walk = function ($branches, $parent) use (&$walk, &$proposal) {
+            if (!is_array($branches) || !array_is_list($branches)) {
+                throw new \InvalidArgumentException('Tree order must be a list of branches.');
             }
+            foreach ($branches as $branch) {
+                if (!is_array($branch) || !array_key_exists('id', $branch)
+                    || array_diff(array_keys($branch), ['id', 'children'])
+                    || !(is_int($branch['id']) || is_string($branch['id']))
+                    || (string) $branch['id'] === '' || (string) $branch['id'] === '0') {
+                    throw new \InvalidArgumentException('Invalid tree branch.');
+                }
+                $id = (string) $branch['id'];
+                if (isset($proposal[$id]) || $id === (string) $parent) {
+                    throw new \InvalidArgumentException('Duplicate or self-parent tree branch.');
+                }
+                $proposal[$id] = ['parent' => $parent, 'order' => count($proposal) + 1];
+                if (array_key_exists('children', $branch)) {
+                    $walk($branch['children'], $branch['id']);
+                }
+            }
+        };
+        if (!(is_int($parentId) || is_string($parentId)) || (string) $parentId === '') {
+            throw new \InvalidArgumentException('Invalid tree parent.');
         }
+        $walk($tree, $parentId);
+
+        $this->getConnection()->transaction(function () use ($proposal, $parentId) {
+            $query = $this->newQuery();
+            if ($this->queryCallback instanceof \Closure) {
+                $query = call_user_func($this->queryCallback, clone $this);
+            }
+            $nodes = $query->lockForUpdate()->get()->keyBy($this->getKeyName());
+            $hierarchy = $this->queryCallback instanceof \Closure
+                ? $this->newQuery()->lockForUpdate()->get()->keyBy($this->getKeyName())
+                : $nodes;
+            if ((string) $parentId !== '0' && !$nodes->has($parentId)) {
+                throw new \InvalidArgumentException('Tree parent does not exist in this tree.');
+            }
+            foreach ($proposal as $id => $change) {
+                if (!$nodes->has($id)) {
+                    throw new \InvalidArgumentException('Tree branch does not exist in this tree.');
+                }
+                // Include retained ancestors: a partial reorder cannot create a cycle.
+                $seen = [(string) $id => true];
+                $parent = $change['parent'];
+                while ((string) $parent !== '0' && $hierarchy->has($parent)) {
+                    if (isset($seen[(string) $parent])) {
+                        throw new \InvalidArgumentException('Tree order would create a cycle.');
+                    }
+                    $seen[(string) $parent] = true;
+                    $parent = $proposal[(string) $parent]['parent'] ?? $hierarchy->get($parent)->getAttribute($this->parentColumn);
+                }
+            }
+            foreach ($proposal as $id => $change) {
+                $node = $nodes->get($id);
+                $node->setAttribute($this->parentColumn, $change['parent']);
+                $node->setAttribute($this->orderColumn, $change['order']);
+                if ($node->save() === false) {
+                    throw new \RuntimeException('Tree branch could not be saved.');
+                }
+            }
+        });
     }
 
     /**
@@ -236,7 +292,7 @@ trait ModelTree
      *
      * @return array
      */
-    public static function selectOptions(\Closure $closure = null, $rootText = 'ROOT')
+    public static function selectOptions(?\Closure $closure = null, $rootText = 'ROOT')
     {
         $options = (new static())->withQuery($closure)->buildSelectOptions();
 
@@ -287,9 +343,37 @@ trait ModelTree
      */
     public function delete()
     {
-        $this->where($this->parentColumn, $this->getKey())->delete();
+        $existed = $this->exists;
+        $cancelled = new \RuntimeException('Tree deletion was cancelled.');
 
-        return parent::delete();
+        try {
+            return $this->getConnection()->transaction(function () use ($cancelled) {
+                $result = parent::delete();
+                if ($result === false) {
+                    // Earlier deleting listeners may already have changed related rows.
+                    throw $cancelled;
+                }
+                if ($result) {
+                    $this->deleteTreeChildren();
+                }
+
+                return $result;
+            });
+        } catch (\Throwable $exception) {
+            $this->exists = $existed;
+
+            if ($exception === $cancelled) {
+                return false;
+            }
+
+            throw $exception;
+        }
+    }
+
+    /** Delete direct children only; bulk deletion intentionally retains deeper descendants. */
+    protected function deleteTreeChildren()
+    {
+        $this->newQuery()->where($this->parentColumn, $this->getKey())->delete();
     }
 
     /**
@@ -302,7 +386,7 @@ trait ModelTree
         static::saving(function (Model $branch) {
             $parentColumn = $branch->getParentColumn();
 
-            if (Request::has($parentColumn) && Request::input($parentColumn) == $branch->getKey()) {
+            if ($branch->getKey() !== null && (string) $branch->getAttribute($parentColumn) === (string) $branch->getKey()) {
                 throw new \Exception(trans('admin.parent_select_error'));
             }
 
@@ -311,12 +395,12 @@ trait ModelTree
 
                 Request::offsetUnset('_order');
 
-                (new Tree(new static()))->saveOrder($order);
+                (new Tree($branch))->saveOrder($order);
 
                 return false;
             }
 
-            return $branch;
+            return null;
         });
     }
 }

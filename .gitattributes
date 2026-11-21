@@ -1,0 +1,2 @@
+# Preserve exact upstream DatetimePicker CSS CRLF bytes; keep other whitespace checks.
+resources/assets/eonasdan-bootstrap-datetimepicker/build/css/bootstrap-datetimepicker.min.css -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

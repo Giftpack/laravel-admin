@@ -22,7 +22,12 @@ class Modal extends AbstractDisplayer
     {
         $renderable = str_replace('\\', '_', $this->renderable);
 
-        return route(admin_get_route('handle-renderable'), compact('renderable'));
+        if (!$this->renderable) {
+            return '';
+        }
+        $_context = \Encore\Admin\Security\HandlerContext::issue('renderable', $this->renderable, ['key' => (string) $this->getKey()]);
+
+        return route(admin_get_route('handle-renderable'), compact('renderable', '_context'));
     }
 
     /**
@@ -32,6 +37,8 @@ class Modal extends AbstractDisplayer
      */
     public function display($callback = null)
     {
+        $title = $this->trans('title');
+
         if (func_num_args() == 2) {
             list($title, $callback) = func_get_args();
         } elseif (func_num_args() == 1) {
@@ -43,7 +50,10 @@ class Modal extends AbstractDisplayer
         if ($async = is_subclass_of($callback, Renderable::class)) {
             $this->renderable = $callback;
         } else {
-            $html = call_user_func_array($callback->bindTo($this->row), [$this->row]);
+            if (!$callback instanceof \Closure) {
+                throw new \InvalidArgumentException('Modal requires a model-bound closure or a renderable class.');
+            }
+            $html = $this->callModelCallback($callback, [$this->row]);
         }
 
         return Admin::component('admin::components.column-modal', [
@@ -54,7 +64,7 @@ class Modal extends AbstractDisplayer
             'html'    => $html,
             'key'     => $this->getKey(),
             'value'   => $this->value,
-            'name'    => $this->getKey().'-'.str_replace('.', '_', $this->getColumn()->getName()),
+            'name'    => $this->getControlId(),
         ]);
     }
 }

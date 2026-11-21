@@ -1,8 +1,14 @@
-<div class="{{$viewClass['form-group']}}">
+<div class="{{$viewClass['form-group']}} {{ $errors->hasAny([$column, "$column.keys", "$column.values"]) ? 'has-error' : '' }}">
 
     <label class="{{$viewClass['label']}} control-label">{{$label}}</label>
 
     <div class="{{$viewClass['field']}}">
+        @include('admin::form.error')
+        @foreach([$column.'.keys', $column.'.values'] as $collectionErrorKey)
+            @foreach($errors->get($collectionErrorKey) as $message)
+                <label class="control-label"><i class="fa fa-times-circle-o"></i> {{$message}}</label><br/>
+            @endforeach
+        @endforeach
         <table class="table table-hover">
             <thead>
             <tr>

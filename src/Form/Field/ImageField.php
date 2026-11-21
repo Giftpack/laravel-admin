@@ -43,18 +43,41 @@ trait ImageField
     public function callInterventionMethods($target)
     {
         if (!empty($this->interventionCalls)) {
+            $this->requireImageManager();
             $manager = new ImageManager(new Driver());
             $image = $manager->read($target);
-
             foreach ($this->interventionCalls as $call) {
-                call_user_func_array(
-                    [$image, $call['method']],
-                    $call['arguments']
-                )->save($target);
+                $method = $call['method'];
+                $arguments = $call['arguments'];
+                // v2's explicit axis remains supported; v3 uses flip()/flop().
+                if ($method === 'flip' && $arguments) {
+                    $axis = array_shift($arguments);
+                    if (!in_array($axis, ['h', 'v'], true)) {
+                        throw new \InvalidArgumentException('Image flip axis must be h or v.');
+                    }
+                    $method = $axis === 'h' ? 'flop' : 'flip';
+                }
+                $result = $image->$method(...$arguments);
+                if (!$result instanceof \Intervention\Image\Interfaces\ImageInterface) {
+                    throw new \InvalidArgumentException('Image field calls must return an image; encoding follows the stored extension.');
+                }
+                $image = $result;
             }
+            file_put_contents($target, (string) $image->encodeByExtension(pathinfo($this->name, PATHINFO_EXTENSION)));
+
         }
 
         return $target;
+    }
+
+    protected function requireImageManager(): void
+    {
+        if (!class_exists(ImageManager::class)) {
+            throw new \RuntimeException('Image transformations and thumbnails require optional intervention/image ^3.11.');
+        }
+        if (!extension_loaded('gd')) {
+            throw new \RuntimeException('Image transformations and thumbnails require the PHP GD extension.');
+        }
     }
 
     /**
@@ -73,9 +96,7 @@ trait ImageField
             return $this;
         }
 
-        if (!class_exists(ImageManager::class)) {
-            throw new \Exception('To use image handling and manipulation, please install [intervention/image] first.');
-        }
+        $this->requireImageManager();
 
         $this->interventionCalls[] = [
             'method'    => $method,
@@ -104,8 +125,9 @@ trait ImageField
      *
      * @return $this
      */
-    public function thumbnail($name, int $width = null, int $height = null)
+    public function thumbnail($name, ?int $width = null, ?int $height = null)
     {
+        $this->requireImageManager();
         if (func_num_args() == 1 && is_array($name)) {
             foreach ($name as $key => $size) {
                 if (count($size) >= 2) {
@@ -156,17 +178,16 @@ trait ImageField
      */
     public function destroyThumbnailFile($original, $name)
     {
-        $ext = @pathinfo($original, PATHINFO_EXTENSION);
+        if (!is_string($original) || $original === '' || \Illuminate\Support\Facades\URL::isValidUrl($original)) return;
+        $this->deleteStoredFile($this->thumbnailPath($original, $name));
+    }
 
-        // We remove extension from file name so we can append thumbnail type
-        $path = @Str::replaceLast('.'.$ext, '', $original);
-
-        // We merge original name + thumbnail name + extension
-        $path = $path.'-'.$name.'.'.$ext;
-
-        if ($this->storage->exists($path)) {
-            $this->storage->delete($path);
-        }
+    protected function thumbnailPath(string $original, string $name): string
+    {
+        $this->assertSafePath($name);
+        if (str_contains($name, '/')) throw new \InvalidArgumentException('Thumbnail names must be filenames.');
+        $ext = pathinfo($original, PATHINFO_EXTENSION);
+        return Str::replaceLast('.'.$ext, '', $original).'-'.$name.'.'.$ext;
     }
 
     /**
@@ -179,31 +200,26 @@ trait ImageField
     protected function uploadAndDeleteOriginalThumbnail(UploadedFile $file)
     {
         foreach ($this->thumbnails as $name => $size) {
-            // We need to get extension type ( .jpeg , .png ...)
-            $ext = pathinfo($this->name, PATHINFO_EXTENSION);
-
-            // We remove extension from file name so we can append thumbnail type
-            $path = Str::replaceLast('.'.$ext, '', $this->name);
-
-            // We merge original name + thumbnail name + extension
-            $path = $path.'-'.$name.'.'.$ext;
-
-            /** @var \Intervention\Image\Image $image */
-            $manager = new ImageManager(new Driver());
-            $image = $manager->read($file);
-
-            $action = $size[2] ?? 'scale';
-            // Resize image with aspect ratio
-            $image->$action($size[0], $size[1])->resizeCanvas($size[0], $size[1], '#ffffff', 'center');
-
-            if (!is_null($this->storagePermission)) {
-                $this->storage->put("{$this->getDirectory()}/{$path}", $image->encode(), $this->storagePermission);
-            } else {
-                $this->storage->put("{$this->getDirectory()}/{$path}", $image->encode());
+            $this->requireImageManager();
+            $path = $this->thumbnailPath($this->uploadPath(), $name);
+            // Never overwrite a pre-existing thumbnail not owned by this upload.
+            if ($this->storedFileExists($path)) {
+                throw new \Encore\Admin\Form\UploadException('Upload thumbnail already exists.');
             }
-        }
+            $manager = new ImageManager(new Driver());
+            $image = $manager->read($file->getRealPath());
+            $action = $size[2] ?? 'scale';
+            $image->$action($size[0], $size[1])->resizeCanvas($size[0], $size[1], '#ffffff', 'center');
+            $this->registerNewFile($path);
+            try {
+                if ($this->storage->put($path, (string) $image->encodeByExtension(pathinfo($this->name, PATHINFO_EXTENSION)), $this->storagePermission ?? []) === false) {
+                    throw new \RuntimeException('Storage write failed.');
+                }
+            } catch (\Throwable $exception) {
+                throw new \Encore\Admin\Form\UploadException('Upload thumbnail write failed.');
+            }
 
-        $this->destroyThumbnail();
+        }
 
         return $this;
     }
