@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run locked Playwright CLI snippets against scripts/start-grid-browser; no browser mocks."""
 import argparse, json, pathlib, subprocess, tempfile, time, re
-p=argparse.ArgumentParser();p.add_argument('url');p.add_argument('engine',choices=['pgsql','mysql']);p.add_argument('--output-prefix',default='issue11');args=p.parse_args();
+p=argparse.ArgumentParser();p.add_argument('url');p.add_argument('engine',choices=['pgsql','mysql']);p.add_argument('--output-prefix',default='grid');args=p.parse_args();
 if not re.fullmatch(r'[A-Za-z0-9_-]+',args.output_prefix):raise SystemExit('Invalid output prefix.')
 root=pathlib.Path(__file__).resolve().parent.parent
 cli=root/'tests/browser/node_modules/@playwright/cli/playwright-cli.js'
@@ -19,7 +19,7 @@ def run(command,label):
     if match:return json.loads(match.group(1))
     return {'completed':True}
 def check(label,source):
-    source=source.replace('output/playwright/issue11-','output/playwright/'+args.output_prefix+'/'+args.output_prefix+'-'+args.engine+'-')
+    source=source.replace('output/playwright/grid-','output/playwright/'+args.output_prefix+'/'+args.output_prefix+'-'+args.engine+'-')
     wrapped='''async (page) => {const errors=[];const network=[];const onError=e=>errors.push(e.message);const onResponse=r=>{const u=new URL(r.url());if(u.pathname.startsWith('/control/'))network.push({method:r.request().method(),path:u.pathname,status:r.status(),type:r.headers()['content-type']||''});};page.on('pageerror',onError);page.on('response',onResponse);try {const result=await ('''+source+''')(page);if(errors.length)throw Error('Browser page errors: '+errors.join(';'));return {...result,browser_pageerrors:0,network};}finally{page.off('pageerror',onError);page.off('response',onResponse);}}'''
     with tempfile.NamedTemporaryFile(mode='w',suffix='.js')as f:
         f.write(wrapped);f.flush();result=run(['run-code','--filename',f.name],label)
@@ -29,7 +29,7 @@ try:
     run(['open',args.url+'/control/auth/login'],'open')
     check('login', '''async (page)=>{await page.getByRole('textbox',{name:'admin.username',exact:true}).fill('operator');await page.getByRole('textbox',{name:'admin.password',exact:true}).fill('fixture-password');await page.getByRole('button',{name:'admin.login',exact:true}).click();await page.goto(new URL('/control/records',page.url()).href);await page.getByRole('heading',{name:'Grid interaction fixture'}).waitFor();return {operator_login:true,browser_version:page.context().browser().version()};}''')
     for label in ['inline','legacy','validation','multi','lifecycle','action','detail','picker','upload','tools','batch','fixed','gallery','denied']:
-        check(label,(root/('tests/browser/issue11/'+label+'-check.js')).read_text())
+        check(label,(root/('tests/browser/grid/'+label+'-check.js')).read_text())
     results['passed']=True
 except Exception:
     run(['snapshot'],'failure-snapshot')

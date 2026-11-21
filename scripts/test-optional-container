@@ -8,8 +8,8 @@ case "$lane" in optional|optional-lowest) ;; *) exit 2 ;; esac
 case "$engine" in pgsql) host=postgres; port=5432 ;; mysql) host=mysql; port=3306 ;; *) exit 2 ;; esac
 project="laravel-admin-optional-$(date +%s)-$$"
 export TEST_DB_CONNECTION="$engine" TEST_DB_HOST="$host" TEST_DB_PORT="$port"
-export TEST_RESULTS_DIR="$(pwd)/.scratch/php85-laravel13-upgrade/artifacts"
-fixture="$(pwd)/.scratch/php85-laravel13-upgrade/dependencies/host-$lane"
+export TEST_RESULTS_DIR="$(pwd)/.scratch/tests/results"
+fixture="$(pwd)/.scratch/tests/dependencies/host-$lane"
 [ -f "$fixture/vendor/autoload.php" ] || { echo 'Install the locked optional integration host first.' >&2; exit 2; }
 cleanup() { docker compose -f docker-compose.yml -f scripts/dependency-compose.yml --env-file /dev/null -p "$project" down --volumes --remove-orphans >/dev/null; }
 trap cleanup EXIT

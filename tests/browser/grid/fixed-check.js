@@ -15,6 +15,6 @@ if(!await page.locator('.grid-quick-create-table .quick-create .create').isVisib
 await page.locator('.table-main').evaluate(e=>{e.scrollLeft=e.scrollWidth;});
 const after=await page.locator('.table-fixed-left').boundingBox();
 if(!before||!after||Math.abs(before.x-after.x)>1)throw Error('Fixed columns moved with scroll');
-await page.screenshot({path:'output/playwright/issue11-fixed-columns.png',fullPage:true});
+await page.screenshot({path:'output/playwright/grid-fixed-columns.png',fullPage:true});
 return {viewport_scroll_header_stuck:true,fixed_left_anchored_during_horizontal_scroll:true,sticky_header:true,quick_create_present_with_fixed_columns:true};
 }

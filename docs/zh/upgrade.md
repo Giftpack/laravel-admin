@@ -18,4 +18,5 @@
 
 應用負責人遇到啟動／登入失敗、權限漂移、資料／檔案雜湊不符、不完整匯出或效能不符時啟動回復。發布操作人員停止寫入與背景工作，保全切換後新增異動以供調整，清除不相容cache，還原**同一復原時間點**的舊程式／PHP及擴充／manifest／lock／vendor／設定／資源／資料庫／上傳，依政策失效sessions並重新登入。還原DB可能捨棄備份後寫入，應用負責人必須決定如何保全與重放，不能自動遺失。用舊runtime重建cache並重啟workers，核對原ID／權限／關聯／檔案／自訂內容及登入／個人頁／CRUD／CSRF／上傳／匯出後才能開放。不可uninstall、重產admin目錄或重新seed。
 
-本機重現：先建置 tools/ci/Dockerfile.php84，再執行 `scripts/test-upgrade-container pgsql`／`mysql`。同一app路徑與資料庫使用真正pg_dump／mysqldump及tar備份，實際Composer install、選擇性header／asset合併、還原及快照比較。測試會確認舊cookie被拒絕且新登入成功。詳細證據位於 `.scratch/php85-laravel13-upgrade/references/issue20-validation.md`。尚未push，沒有宣稱遠端GitHub Actions已執行。
+
+請先於應用程式自己的 staging 環境演練升級與回復，協調資料庫與上傳檔案備份並核對還原結果。操作證據應保存在原始碼目錄之外；套件測試不能取代應用程式專屬的復原計畫。本專案不保留此次升級任務的一次性演練環境或任務報告。

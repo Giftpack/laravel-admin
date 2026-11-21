@@ -6,7 +6,7 @@ if (!in_array($lane, ['current', 'lowest', 'optional', 'optional-lowest', 'excel
 }
 $root = dirname(__DIR__);
 $source = "$root/tests/Fixtures/dependencies/host-$lane";
-$directory = $argv[2] ?? "$root/.scratch/php85-laravel13-upgrade/dependencies/host-$lane";
+$directory = $argv[2] ?? "$root/.scratch/tests/dependencies/host-$lane";
 if (isset($argv[2]) && $argv[2] !== '/host') {
     throw new RuntimeException('The optional container output directory must be /host');
 }

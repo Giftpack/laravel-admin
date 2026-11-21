@@ -14,7 +14,7 @@ if(qr.status()!==200 || !qr.headers()['content-type'].startsWith('image/'))throw
 await page.waitForFunction(()=>document.querySelector('.popover img')?.naturalWidth>0);
 if(!new URL(qr.url()).searchParams.get('data').includes('synthetic-grid-qr'))throw Error('QR encoded wrong payload');
 const downloading=page.waitForEvent('download');await page.locator('td.column-download a').click();const download=await downloading;if(download.suggestedFilename()!=='fixture-image.jpg')throw Error('File download failed');
-await page.screenshot({path:'output/playwright/issue11-gallery.png',fullPage:true});
+await page.screenshot({path:'output/playwright/grid-gallery.png',fullPage:true});
 await page.getByRole('link',{name:'Open records',exact:true}).click();await page.getByRole('heading',{name:'Grid interaction fixture'}).waitFor();
 return {downloaded_attachment:true,link_navigation:true,local_image_loaded:true,carousel_control_changed_slide:true,table_order_and_literal_text:true,limit_expanded:true,secret_toggled:true,copy_clipboard_value:true,existing_qrservice_synthetic_image_200:true};
 }

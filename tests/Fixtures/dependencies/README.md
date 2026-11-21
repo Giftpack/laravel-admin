@@ -1,8 +1,8 @@
 # Frozen dependency graphs
 
 These manifests and locks are versioned test inputs. The package itself does not
-ship a consumer lock. `current` and `lowest` describe the root package graphs;
-`host-*` pairs describe independent core, optional-tool and Excel applications.
+ship a consumer lock. The six `host-*` pairs describe independent core,
+optional-tool and Excel applications for current and lowest dependency sets.
 
 Run `scripts/ci-prepare-dependencies current` and/or
 `scripts/ci-prepare-dependencies lowest` from a clean checkout. Preparation copies
@@ -13,11 +13,11 @@ installation or root `vendor` directory is required.
 
 `php scripts/prepare-dependency-host.php current` can materialize one host without
 installing packages; it also accepts `lowest`, `optional`, `optional-lowest`,
-`excel` and `excel-lowest`. CI invokes it in Docker with `/host` as its writable
+`excel` and `excel-lowest`. The preparation helper invokes it in Docker with `/host` as its writable
 output while keeping the checkout read-only.
 
 Refresh a graph deliberately with Composer in the pinned runtime, retaining its
 framework/Symfony policy, and copy both its manifest and lock back here. Run the
 full matching CI lane and platform/advisory checks before accepting the update.
-Generated applications, vendor trees, logs and historical release evidence remain
-ignored under `.scratch`.
+Generated applications, vendor trees and logs are ignored under `.scratch/tests`.
+One-time release evidence does not belong in the source tree.

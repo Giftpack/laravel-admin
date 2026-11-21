@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Issue19 real Chromium via the repository's locked Playwright CLI (never a test double)."""
+"""Browser parity checks in Chromium via the repository's locked Playwright CLI (never a test double)."""
 import argparse,json,pathlib,subprocess,tempfile,time,re,zipfile
-p=argparse.ArgumentParser();p.add_argument('url');p.add_argument('engine',choices=['pgsql','mysql']);p.add_argument('--output-prefix',default='issue19');p.add_argument('--stage',action='append');args=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('url');p.add_argument('engine',choices=['pgsql','mysql']);p.add_argument('--output-prefix',default='parity');p.add_argument('--stage',action='append');args=p.parse_args()
 root=pathlib.Path(__file__).resolve().parent.parent
 out=root/'output/playwright'/args.output_prefix/args.engine;out.mkdir(parents=True,exist_ok=True)
 session=args.output_prefix+'-'+args.engine+'-'+str(int(time.time()));base=['node',str(root/'tests/browser/node_modules/@playwright/cli/playwright-cli.js'),'--session',session]
@@ -41,7 +41,7 @@ try:
  run(['open',args.url+'/control/auth/login'],'open');run(['tracing-start'],'tracing-start')
  check('login',"""async(page)=>{await page.getByRole('textbox',{name:'admin.username',exact:true}).fill('admin');await page.getByRole('textbox',{name:'admin.password',exact:true}).fill('fixture-password');await page.getByRole('button',{name:'admin.login',exact:true}).click();await page.waitForLoadState('networkidle');await page.goto(new URL('/control/parity/fields/scalar',page.url()).href);await page.getByRole('heading',{name:'Browser fields scalar'}).waitFor();await page.waitForLoadState('networkidle');return{authenticated:true,version:page.context().browser().version()};}""")
  for label in args.stage or ['fields','nested','uploads','management','logs','tree','widgets','diagnostics','security']:
-  check(label,(root/('tests/browser/issue19/'+label+'-check.js')).read_text())
+  check(label,(root/('tests/browser/parity/'+label+'-check.js')).read_text())
  results['passed']=True
 except Exception:
  run(['snapshot'],'failure-snapshot');raise

@@ -6,10 +6,6 @@ try {
     PackageTestHost::assertDisposableEnvironment();
     function ensure($condition, $message) { if (!$condition) throw new RuntimeException($message); }
     class WorkflowIdentityFixture extends Encore\Admin\Auth\Database\Administrator {}
-    if (($argv[2]??'')==='frozen') {
-        require '/application/.scratch/php85-laravel13-upgrade/issue17-cycle1-candidate/src/Widgets/StepForm.php';
-        require '/application/.scratch/php85-laravel13-upgrade/issue17-cycle1-candidate/src/Widgets/MultipleSteps.php';
-    }
     $app=PackageTestHost::create(PackageTestHost::directory());
     config(['app.debug'=>false,'session.serialization'=>($argv[1]??'php'),'session.driver'=>'file','session.cookie'=>'workflows_session','auth.defaults.guard'=>'web',
         'admin.auth.guard'=>'backoffice','auth.guards.backoffice'=>['driver'=>'session','provider'=>'forms'],
@@ -80,15 +76,6 @@ try {
     ensure($request('POST','/_handle_form_',$a)->getStatusCode()===302,'Save A');
     ensure($request('POST','/_handle_form_',$b)->getStatusCode()===302,'Save B');
     $page=$request('GET','/same');$aRead=formData($page->getContent(),WorkflowAFirst::class);$bRead=formData($page->getContent(),WorkflowBFirst::class);
-    if (($argv[2]??'')==='frozen') {
-        ensure($aRead['value']==='Approved B'&&$bRead['value']==='Approved B','Original overwrite was not reproduced');
-        $last=$request('GET','/same?step=two');$finish=formData($last->getContent(),WorkflowALast::class);$finish['approved']='yes';$finish['_token']=$csrf;
-        ensure($request('POST','/_handle_form_',$finish)->getStatusCode()===302,'Original A completion');
-        $page=$request('GET','/same');$remaining=formData($page->getContent(),WorkflowBFirst::class);
-        ensure(($remaining['value']??'')==='','Original completion did not wipe B');
-        ensure(!isset(session('admin_step_contexts',[])[$b['_step_context']]),'Original B context survived unexpectedly');
-        echo json_encode(['status'=>'reproduced','php'=>PHP_VERSION,'laravel'=>$app->version(),'engine'=>config('database.default'),'serialization'=>config('session.serialization'),'observed'=>['a_reads_b_data'=>true,'a_completion_wipes_b_data_and_context'=>true],'captured_sha256'=>hash_file('sha256','/application/.scratch/php85-laravel13-upgrade/issue17-cycle1-candidate/src/Widgets/StepForm.php')],JSON_PRETTY_PRINT).PHP_EOL;exit(0);
-    }
     ensure($aRead['value']==='Approved A'&&$bRead['value']==='Approved B','Same-page workflows overwrite one another');
     $aContext=session('admin_step_contexts.'.$a['_step_context']);$bContext=session('admin_step_contexts.'.$b['_step_context']);
     ensure($aContext['stateKey']!==$bContext['stateKey'],'Workflow definitions share a state key');

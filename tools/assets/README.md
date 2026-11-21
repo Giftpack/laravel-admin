@@ -1,6 +1,6 @@
 # Bundled frontend distribution
 
-The package ships ready-to-publish assets under `resources/assets`; consumer applications do not need Node. The root package deliberately has no npm manifest. This directory is an isolated development source/build graph with exact npm versions and integrity hashes. Its Node24/npm12 acceptance versions are recorded in issue19 evidence.
+The package ships ready-to-publish assets under `resources/assets`; consumer applications do not need Node. The root package deliberately has no npm manifest. This directory is an isolated development source/build graph with exact npm versions and integrity hashes. The build tooling uses Node 24 and npm 12.
 
 From the repository root:
 
@@ -8,6 +8,7 @@ From the repository root:
 npm ci --prefix tools/assets --ignore-scripts --no-audit --no-fund
 node tools/assets/build.mjs
 node tools/assets/build.mjs --check
+python3 tools/assets/inventory.py --output /tmp/laravel-admin-assets.json
 ```
 
 Builds never fetch code or run package lifecycle scripts. npm's lock verifies downloaded source tarballs. The build copies upstream distribution bytes, applies both saved Debian Bootstrap security patches with zero fuzz, concatenates Bootstrap modules in its established order, and uses locked Terser5.44.1. It preserves the original Font Awesome4 icon palette and backports upstream jQuery UI Position1.12.1's window/document offset guard and1.13.0's CVE2021-41184 selector-only `of` handling. Readable/minified jQuery, Bootstrap, Moment and DOMPurify variants are distributed together. The exact upstream DateTimePicker CSS includes four CRLF header lines; a single-path `.gitattributes` rule preserves those bytes and recognizes CR at line end without weakening other whitespace checks. The historical `jQuery-2.1.4.min.js` filename remains a compatibility alias of current patched jQuery bytes; the default path is now `jquery.min.js`.
@@ -19,6 +20,7 @@ Primary patch sources (saved exactly in `patches/`):
 - [Debian3.4.1+dfsg-7 CVE2024-6485 patch](https://sources.debian.org/data/main/t/twitter-bootstrap3/3.4.1%2Bdfsg-7/debian/patches/0003-CVE-2024-6485.patch)
 - [Debian3.4.1+dfsg-7 CVE2025-1647 patch](https://sources.debian.org/data/main/t/twitter-bootstrap3/3.4.1%2Bdfsg-7/debian/patches/CVE-2025-1647.patch)
 - [jQuery UI Position1.12.1 window/document guard](https://github.com/jquery/jquery-ui/blob/1.12.1/ui/position.js)
+- [jQuery UI Position1.13.0 selector-only handling](https://github.com/jquery/jquery-ui/blob/1.13.0/ui/position.js)
 
 Bootstrap3 and several retained plugins are legacy maintenance snapshots. Local patches and the explicit tested matrix establish this package candidate's disposition; they do not imply upstream support. npm audit still recognizes vanilla Bootstrap3.4.1 and reports its two advisories; audit cannot inspect these local backports. The exact patch bytes and actual malicious-loading-text/DOM-clobbering browser regressions substantiate the remediation. Tool-only Moment Timezone is overridden to patched0.5.48; it is not shipped or loaded by the browser.
 

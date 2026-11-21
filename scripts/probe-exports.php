@@ -100,7 +100,7 @@ try {
                     ensure($sheet->getCell('A'.($offset+2))->getDataType()==='n'&&$sheet->getCell('C'.($offset+2))->getDataType()==='n','Workbook numeric type');
                     if ($title!==null && $title!=='') ensure($sheet->getCell('B'.($offset+2))->getDataType()===($title==='0'?'n':'s'),'Workbook title type');
                 }
-                $artifact='/results/issue15-workbook-'.$case.'-'.Illuminate\Foundation\Application::VERSION.'-'.getenv('DB_CONNECTION').'.xlsx';
+                $artifact='/results/exports-workbook-'.$case.'-'.Illuminate\Foundation\Application::VERSION.'-'.getenv('DB_CONNECTION').'.xlsx';
                 ensure(copy($file,$artifact),'Retain real workbook evidence');
                 $results['excel'.$case]=['rows'=>count($values),'headers'=>$headers,'sha256'=>hash_file('sha256',$file),'artifact'=>$artifact];$book->disconnectWorksheets();
             }
@@ -115,7 +115,7 @@ try {
         $log=file_get_contents($dir.'/server.log');ensure(!preg_match('/Deprecated|Warning:|PHP Warning/',$log),'Unexpected PHP diagnostics '.$log);
         echo json_encode(['php'=>PHP_VERSION,'laravel'=>Illuminate\Foundation\Application::VERSION,'database'=>getenv('DB_CONNECTION'),'autoload'=>$autoload,'cases'=>$results],JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE).PHP_EOL;
     } catch (Throwable $error) {
-        copy($dir.'/server.log','/results/issue15-server-failure-'.Illuminate\Foundation\Application::VERSION.'-'.getenv('DB_CONNECTION').'-'.(class_exists(Maatwebsite\Excel\Excel::class)?'excel':'core').'.log');
+        copy($dir.'/server.log','/results/exports-server-failure-'.Illuminate\Foundation\Application::VERSION.'-'.getenv('DB_CONNECTION').'-'.(class_exists(Maatwebsite\Excel\Excel::class)?'excel':'core').'.log');
         throw $error;
     } finally { proc_terminate($server);proc_close($server); (new Illuminate\Filesystem\Filesystem())->deleteDirectory($dir); }
 } catch (Throwable $e) { fwrite(STDERR,get_class($e).': '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine().PHP_EOL);exit(1); }

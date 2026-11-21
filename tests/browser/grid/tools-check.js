@@ -23,7 +23,7 @@ response=page.waitForResponse(r=>r.url().includes('_columns_')&&r.request().meth
 await page.locator('.column-select-submit').click();await response;await page.locator('th.column-note').waitFor({state:'detached'});
 await page.locator('.column-selector button.dropdown-toggle').click();await page.locator('.column-select-all').click();
 response=page.waitForResponse(r=>r.request().headers()['x-pjax']==='true');await page.locator('.column-select-submit').click();await response;await page.locator('th.column-note').waitFor();
-await page.evaluate(()=>{window.hostKeydowns=0;jQuery(document).on('keydown.issue11Host',()=>window.hostKeydowns++);});
+await page.evaluate(()=>{window.hostKeydowns=0;jQuery(document).on('keydown.gridHost',()=>window.hostKeydowns++);});
 await page.getByRole('heading',{name:'Grid interaction fixture'}).click();await page.keyboard.press('s');
 if(!await page.locator('input.grid-quick-search').evaluate(e=>e===document.activeElement))throw Error('Search hotkey');
 if(await page.evaluate(()=>window.hostKeydowns)<1)throw Error('Host key handler removed');
@@ -32,6 +32,6 @@ await page.locator('.grid-table tbody tr').first().locator('input[type=checkbox]
 if((await page.evaluate(()=>jQuery.admin.grid.selected())).join()!=='1')throw Error('Select first row: '+JSON.stringify(await page.evaluate(()=>jQuery.admin.grid.selected())));
 response=page.waitForResponse(r=>r.url().includes('page=2'));await page.getByRole('link',{name:'2',exact:true}).click();await response;await page.getByRole('link',{name:'Fourth',exact:true}).waitFor();
 if((await page.evaluate(()=>jQuery.admin.grid.selected())).length!==0)throw Error('Page selection not reset');
-await page.screenshot({path:'output/playwright/issue11-grid-tools.png',fullPage:true});
+await page.screenshot({path:'output/playwright/grid-grid-tools.png',fullPage:true});
 return {quick_create_invalid_corrected_saved:true,switch_saved:true,row_failure_sanitized:true,column_selector_hide_restore:true,hotkeys_preserve_host_handlers:true,refresh_pjax:true,page_selection_reset:true};
 }

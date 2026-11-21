@@ -10,12 +10,12 @@ if (PHP_SAPI === 'cli-server') {
     if ($path !== '/' && is_file($root.'/public'.$path) && realpath($root.'/public'.$path) && str_starts_with(realpath($root.'/public'.$path), $root.'/public/')) return false;
 }
 $app = PackageTestHost::create($root);
-config(['app.debug'=>false,'session.driver'=>'file','session.cookie'=>'issue11_session','admin.route.prefix'=>'control','fixture.grid_audit'=>true,'admin.operation_log.enable'=>false,'admin.grid_action_class'=>Encore\Admin\Grid\Displayers\DropdownActions::class]);
+config(['app.debug'=>false,'session.driver'=>'file','session.cookie'=>'grid_session','admin.route.prefix'=>'control','fixture.grid_audit'=>true,'admin.operation_log.enable'=>false,'admin.grid_action_class'=>Encore\Admin\Grid\Displayers\DropdownActions::class]);
 $app->instance('env', 'browser-acceptance');
 @mkdir($root.'/app/Admin',0777,true);
 file_put_contents($root.'/app/Admin/bootstrap.php', '<?php Encore\\Admin\\Form::forget(["map","editor"]);');
 config(['admin.bootstrap'=>$root.'/app/Admin/bootstrap.php']);
-if (getenv('ISSUE19_BROWSER') === '1') { require '/application/tests/Fixtures/BrowserParity.php'; BrowserParity::configure($app); }
+if (getenv('PARITY_BROWSER') === '1') { require '/application/tests/Fixtures/BrowserParity.php'; BrowserParity::configure($app); }
 if (PHP_SAPI === 'cli' && in_array('--seed', $_SERVER['argv'] ?? [], true)) {
     @unlink($root.'/.seed-complete');
     Illuminate\Support\Facades\Schema::dropAllTables();
@@ -34,7 +34,7 @@ if (PHP_SAPI === 'cli' && in_array('--seed', $_SERVER['argv'] ?? [], true)) {
     $user=Encore\Admin\Auth\Database\Administrator::create(['username'=>'operator','name'=>'Operator','password'=>Illuminate\Support\Facades\Hash::make('fixture-password')]);
     $denied=Encore\Admin\Auth\Database\Administrator::create(['username'=>'denied','name'=>'Denied','password'=>Illuminate\Support\Facades\Hash::make('fixture-password')]);
     $p=Encore\Admin\Auth\Database\Permission::create(['name'=>'Fixture routes','slug'=>'fixture','http_method'=>[],'http_path'=>'/*']);$user->permissions()->attach($p);$denied->permissions()->attach($p);
-    if (getenv('ISSUE19_BROWSER') === '1') BrowserParity::seed();
+    if (getenv('PARITY_BROWSER') === '1') BrowserParity::seed();
     file_put_contents($root.'/.seed-complete','complete');
     echo "Seeded guarded browser fixture\n";return;
 }
@@ -67,7 +67,7 @@ $r->middleware(['web',Encore\Admin\Middleware\Authenticate::class,Encore\Admin\M
         $grid->column('hidden')->display(function(){return 'Synthetic hidden value';})->secret();
         return (new Encore\Admin\Layout\Content())->header('Displayer gallery')->body($grid);
     });
-    $r->get('fixture-state',fn()=>response()->json(['records'=>InteractionRecord::with('tags')->get(),'other_records'=>InteractionOtherGridRecord::all(),'requests'=>is_file('/tmp/issue11-request-fields.jsonl')?array_map(fn($line)=>json_decode($line,true),file('/tmp/issue11-request-fields.jsonl',FILE_IGNORE_NEW_LINES)):[]]));
+    $r->get('fixture-state',fn()=>response()->json(['records'=>InteractionRecord::with('tags')->get(),'other_records'=>InteractionOtherGridRecord::all(),'requests'=>is_file('/tmp/grid-request-fields.jsonl')?array_map(fn($line)=>json_decode($line,true),file('/tmp/grid-request-fields.jsonl',FILE_IGNORE_NEW_LINES)):[]]));
     $r->get('records',[InteractionController::class,'index']);
     $r->put('records/{id}',[InteractionController::class,'update']);
     $r->post('records',[InteractionController::class,'store']);
@@ -75,6 +75,6 @@ $r->middleware(['web',Encore\Admin\Middleware\Authenticate::class,Encore\Admin\M
     $r->get('_handle_selectable_',[Encore\Admin\Controllers\HandleController::class,'handleSelectable'])->name('admin.handle-selectable');
     $r->get('_handle_renderable_',[Encore\Admin\Controllers\HandleController::class,'handleRenderable'])->name('admin.handle-renderable');
 });
-if (getenv('ISSUE19_BROWSER') === '1') BrowserParity::routes($r);
+if (getenv('PARITY_BROWSER') === '1') BrowserParity::routes($r);
 $r->getRoutes()->refreshNameLookups();
 $app->handleRequest(Illuminate\Http\Request::capture());

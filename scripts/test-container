@@ -10,7 +10,7 @@ esac
 if [ "$#" -gt 0 ]; then shift; fi
 project="laravel-admin-test-$(date +%s)-$$"
 export TEST_DB_CONNECTION="$engine" TEST_DB_HOST="$host" TEST_DB_PORT="$port"
-export TEST_RESULTS_DIR="$(pwd)/.scratch/php85-laravel13-upgrade/artifacts"
+export TEST_RESULTS_DIR="$(pwd)/.scratch/tests/results"
 mkdir -p "$TEST_RESULTS_DIR"
 cleanup() { docker compose --env-file /dev/null -p "$project" down --volumes --remove-orphans >/dev/null; }
 trap cleanup EXIT
@@ -18,6 +18,6 @@ trap 'exit 130' HUP INT TERM
 docker compose --env-file /dev/null -p "$project" build application
 docker compose --env-file /dev/null -p "$project" up -d --wait "$host"
 if [ "$#" -eq 0 ]; then
-  set -- vendor/bin/phpunit --log-junit "/results/baseline-$engine.xml"
+  set -- vendor/bin/phpunit --log-junit "/results/package-$engine.xml"
 fi
 docker compose --env-file /dev/null -p "$project" run --rm --no-deps application php "$@"

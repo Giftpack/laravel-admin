@@ -56,7 +56,7 @@ Follow [English installation](docs/en/installation.md) / [中文安裝](docs/zh/
 
 Existing Laravel12 hosts must follow [English upgrade and rollback](docs/en/upgrade.md) / [中文升級與回復](docs/zh/upgrade.md). Preserve IDs/data/customizations; do not regenerate/reseed existing installations. Mandatory migrations include POST+CSRF logout, signed generic handler contexts with explicit policies, selective hash-aware asset publication including the new jQuery path, and cache/CDN invalidation. Custom Excel4 subclasses and CSV consumers need the documented API/wire changes. Same-install PHP8.4.28/Laravel12.25→PHP8.5.13/Laravel13.43 and actual backup rollback are rehearsed on both engines.
 
-Optional tested packages: Intervention Image3.11.0/3.11.10, Excel4.0.7/PhpSpreadsheet5.11.0, MewsCaptcha3.5.1, SpatieSortable5.0.1 and Minify1.3.76. Development BrowserKit7.3/PHPUnit12.5/Mockery1.6.15 are separate from runtime requirements. See [test/CI instructions](tests/README.md) and [changelog](CHANGELOG.md). Local workflow-equivalent commands are executed; remote CI is unrun until an authorized push.
+Optional tested packages: Intervention Image3.11.0/3.11.10, Excel4.0.7/PhpSpreadsheet5.11.0, MewsCaptcha3.5.1, SpatieSortable5.0.1 and Minify1.3.76. Development BrowserKit7.3/PHPUnit12.5/Mockery1.6.15 are separate from runtime requirements. See [development test instructions](tests/README.md) and [changelog](CHANGELOG.md). Reusable local commands cover current/minimum dependencies on both database engines; no GitHub Actions workflow is included.
 
 Configurations
 ------------

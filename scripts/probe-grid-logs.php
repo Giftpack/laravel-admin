@@ -39,7 +39,7 @@ try {
     ensure($request('POST','/nested/control/auth/login',['username'=>'operator','password'=>'fixture-password','_token'=>$csrf])->getStatusCode()===302,'Login');
     $browse=Encore\Admin\Auth\Database\Permission::create(['name'=>'work','slug'=>'work','http_method'=>['GET'],'http_path'=>"/work\n/csrf"]);$user->permissions()->attach($browse);
     $csrf=json_decode($request('GET','/nested/control/csrf')->getContent(),true)['csrf'];
-    $secret='synthetic-issue10-secret';
+    $secret='synthetic-log-secret';
     ensure($request('GET','/nested/control/work',['password'=>$secret,'nested'=>['apiKey'=>$secret,'safe'=>'retained-value'],'_context'=>$secret])->getStatusCode()===200,'Middleware real request');
     $log=Encore\Admin\Auth\Database\OperationLog::firstOrFail();
     ensure($log->getConnectionName()==='audit' && $log->getTable()==='audit_operation_log' && $log->user_id===$user->id && $log->method==='GET' && $log->path==='nested/control/work' && $log->ip==='192.0.2.15' && $log->created_at!==null,'Audit metadata');

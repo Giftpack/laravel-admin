@@ -313,7 +313,7 @@ class GridQueryTest extends TestCase
             $this->assertStringContainsString('qualified_records', $exception->getSql());
             $this->assertStringContainsString('grid_', $exception->getSql());
         } finally { DB::disconnect('grid_qualified'); }
-        file_put_contents('/results/issue10-qualified-'.app()->version().'-'.config('database.default').'.json', json_encode(['native_introspection' => true, 'grid_unqualified_key_query' => true] + $qualification, JSON_PRETTY_PRINT)."\n");
+        file_put_contents('/results/qualified-key-'.app()->version().'-'.config('database.default').'.json', json_encode(['native_introspection' => true, 'grid_unqualified_key_query' => true] + $qualification, JSON_PRETTY_PRINT)."\n");
     }
 
     public function testRelationOwnedTotalsDateRangesAndConfiguredCasts()

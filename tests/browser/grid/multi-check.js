@@ -23,6 +23,6 @@ for(let round=0;round<2;round++) {
  }
 }
 page.off('response',observe);if(totalWrites!==8)throw Error('Duplicate writes after overlapping/PJAX grids: '+totalWrites);
-await page.screenshot({path:'output/playwright/issue11-multi-grid.png',fullPage:true});
+await page.screenshot({path:'output/playwright/grid-multi-grid.png',fullPage:true});
 return {two_grids_same_columns_and_keys:true,own_resources_only:true,own_selectable_and_modal_and_expand:true,after_pjax_no_duplicate_writes:true,exact_mutation_requests:8,dom_ids_unique:true,legacy_css_classes_retained:true};
 }

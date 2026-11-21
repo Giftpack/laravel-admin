@@ -69,7 +69,7 @@ class InteractionController extends Illuminate\Routing\Controller
         $form->multipleFile('files')->rules('nullable');
         return $form;
     }
-    public function update($id) { if (config('fixture.grid_audit')) file_put_contents('/tmp/issue11-request-fields.jsonl', json_encode(['id'=>(string)$id,'path'=>request()->path(),'fields'=>array_keys(request()->except(['_token','_method','_edit_inline'])),'files'=>array_keys(request()->allFiles())]).PHP_EOL, FILE_APPEND); abort_if(Encore\Admin\Facades\Admin::user()->username === 'denied',403); return static::form()->update($id); }
+    public function update($id) { if (config('fixture.grid_audit')) file_put_contents('/tmp/grid-request-fields.jsonl', json_encode(['id'=>(string)$id,'path'=>request()->path(),'fields'=>array_keys(request()->except(['_token','_method','_edit_inline'])),'files'=>array_keys(request()->allFiles())]).PHP_EOL, FILE_APPEND); abort_if(Encore\Admin\Facades\Admin::user()->username === 'denied',403); return static::form()->update($id); }
     public function store() { abort_if(Encore\Admin\Facades\Admin::user()->username === 'denied',403); return static::form()->store(); }
     public function index(Encore\Admin\Layout\Content $content)
     {

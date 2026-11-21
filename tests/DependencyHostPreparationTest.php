@@ -40,7 +40,7 @@ class DependencyHostPreparationTest extends TestCase
             }
             $process = new Process([PHP_BINARY, $this->checkout.'/scripts/prepare-dependency-host.php', $lane], $this->checkout);
             $process->mustRun();
-            $host = $this->checkout.'/.scratch/php85-laravel13-upgrade/dependencies/host-'.$lane;
+            $host = $this->checkout.'/.scratch/tests/dependencies/host-'.$lane;
             self::assertSame(file_get_contents($source.'/composer.json'), file_get_contents($host.'/composer.json'));
             self::assertSame(file_get_contents($source.'/composer.lock'), file_get_contents($host.'/composer.lock'));
             foreach (['bootstrap/app.php', 'config/app.php', 'config/admin.php', 'config/cache.php', 'config/session.php', 'routes/web.php'] as $name) {

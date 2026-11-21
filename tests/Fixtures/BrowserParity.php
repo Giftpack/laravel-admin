@@ -1,5 +1,5 @@
 <?php
-/** Synthetic issue19-only persistent browser fixture; requires the existing disposable guard. */
+/** Synthetic parity-only persistent browser fixture; requires the existing disposable guard. */
 use Encore\Admin\Form;
 use Encore\Admin\Grid;
 use Encore\Admin\Layout\Content;

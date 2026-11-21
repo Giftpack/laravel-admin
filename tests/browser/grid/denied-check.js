@@ -29,6 +29,6 @@ await page.locator('td.column-file .inline-upload-error').first().filter({hasTex
 const after=await (await page.request.get(new URL('fixture-state',base).href)).json();
 if(JSON.stringify(before.records)!==JSON.stringify(after.records))throw Error('Denied request mutated database');
 if(await page.getByRole('link',{name:'Rename safely',exact:true}).count())throw Error('Denied action visible');
-await page.screenshot({path:'output/playwright/issue11-denied.png',fullPage:true});
+await page.screenshot({path:'output/playwright/grid-denied.png',fullPage:true});
 return {denied_legacy_edit_403_visible:true,denied_inline_403:true,denied_signed_picker_403:true,denied_signed_detail_403:true,denied_upload_403:true,denied_errors_visible:true,denied_action_hidden:true,database_unchanged:true};
 }

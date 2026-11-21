@@ -15,7 +15,7 @@ const invalid=page.waitForResponse(r=>r.request().method()==='POST' && /records\
 await page.locator('td.column-file input[type=file]').first().setInputFiles({name:'bad.exe',mimeType:'application/octet-stream',buffer:Buffer.from([0,1,2,3,255,0,2,0,254])});
 if((await invalid).status()!==422)throw Error('Upload validation absent');
 await page.locator('td.column-file .inline-upload-error').first().filter({hasText:/txt|file|type/}).waitFor();
-await page.screenshot({path:'output/playwright/issue11-upload-validation.png',fullPage:true});
+await page.screenshot({path:'output/playwright/grid-upload-validation.png',fullPage:true});
 const valid=page.waitForResponse(r=>r.request().method()==='POST' && /records\/1/.test(r.url()));
 await page.locator('td.column-file input[type=file]').first().setInputFiles({name:singleName,mimeType:'text/plain',buffer:Buffer.from('single fixture')});
 const saved=await valid;if(saved.status()!==200 || !(await saved.json()).status)throw Error('Single upload failed');

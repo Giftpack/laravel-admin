@@ -166,16 +166,16 @@ class DetailLayoutPjaxTest extends TestCase
     }
     public function testRepeatedAndNestedRequestPresentationIsScopedWhileRegistrationsSurvive(): void
     {
-        $admin=Encore\Admin\Facades\Admin::getFacadeRoot();$before=Admin::$script;Admin::script('global-script');Admin::extend('issue17',DetailStepFixture::class);
+        $admin=Encore\Admin\Facades\Admin::getFacadeRoot();$before=Admin::$script;Admin::script('global-script');Admin::extend('request-isolation-fixture',DetailStepFixture::class);
         $base=Admin::$baseCss;$nav=$admin->navbar();$nav->right('Global nav');
         try {
             $admin->withinRequest(function()use($admin){Admin::script('first-secret');Admin::setTitle('First');$admin->navbar()->right('First nav');
                 $admin->withinRequest(function(){Admin::script('nested-secret');});$this->assertNotContains('nested-secret',Admin::$script);$this->assertContains('first-secret',Admin::$script);
                 $this->assertStringContainsString('First nav',$admin->navbar()->render());
             });
-            $this->assertContains('global-script',Admin::$script);$this->assertNotContains('first-secret',Admin::$script);$this->assertStringNotContainsString('First nav',$admin->navbar()->render());$this->assertSame(DetailStepFixture::class,Admin::$extensions['issue17']);
+            $this->assertContains('global-script',Admin::$script);$this->assertNotContains('first-secret',Admin::$script);$this->assertStringNotContainsString('First nav',$admin->navbar()->render());$this->assertSame(DetailStepFixture::class,Admin::$extensions['request-isolation-fixture']);
             config(['admin.skin'=>'skin-red']);$red=Admin::baseCss();config(['admin.skin'=>'skin-blue']);$blue=Admin::baseCss();$this->assertNotSame($red[0],$blue[0]);$this->assertSame($base,Admin::$baseCss);
             try {$admin->withinRequest(function(){Admin::script('throw-secret');throw new TypeError('test');});}catch(TypeError $e){}$this->assertNotContains('throw-secret',Admin::$script);
-        } finally { Admin::$script=$before;unset(Admin::$extensions['issue17']); }
+        } finally { Admin::$script=$before;unset(Admin::$extensions['request-isolation-fixture']); }
     }
 }

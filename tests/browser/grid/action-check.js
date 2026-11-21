@@ -10,7 +10,7 @@ const response=await responsePromise; const body=await response.json();
 if(response.status()!==200 || body.status!==false || JSON.stringify(body).includes('synthetic-sensitive-value') || JSON.stringify(body).includes('unsafe')) throw Error('Unsafe/absent validation');
 await page.getByRole('alert').filter({hasText:'allowed size or length'}).waitFor();
 if(!await page.getByRole('dialog').getByRole('button',{name:'admin.submit',exact:true}).isEnabled()) throw Error('Submission stayed disabled');
-await page.screenshot({path:'output/playwright/issue11-safe-action-validation.png',fullPage:true});
+await page.screenshot({path:'output/playwright/grid-safe-action-validation.png',fullPage:true});
 await page.getByRole('textbox', {name:'admin.input Title', exact:true}).fill('Action corrected');
 const correctedPromise=page.waitForResponse(r=>r.url().includes('_handle_action_') && r.request().method()==='POST');
 await page.getByRole('dialog').getByRole('button',{name:'admin.submit',exact:true}).click();

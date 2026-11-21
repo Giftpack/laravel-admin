@@ -1,6 +1,6 @@
 # Third-party bundled asset notices
 
-Version and provenance table for every distributed library family. Exact file hashes and original/candidate mapping are in the issue19 asset inventory and `tools/assets/distribution-sha256.json`. Unversioned entries identify the exact historical vendored snapshot rather than claiming an upstream release.
+Version and provenance table for every distributed library family. Current file hashes and library mappings are produced by `tools/assets/inventory.py`; shipped bytes are recorded in `tools/assets/distribution-sha256.json`. Unversioned entries identify the exact historical vendored snapshot rather than claiming an upstream release.
 
 | Library | Distributed version | License | Primary provenance |
 | --- | --- | --- | --- |
